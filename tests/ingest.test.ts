@@ -29,6 +29,11 @@ interface IngestModule {
     dryRun: boolean;
     cover: string | null;
   }>;
+  findCoverHref(
+    opf: string,
+    manifest: Map<string, { href: string; type: string }>,
+  ): { href: string; mediaType: string } | null;
+  coverExtension(href: string, mediaType?: string): string;
 }
 
 let ingest: IngestModule;
@@ -46,6 +51,58 @@ async function readNovelJson(slug: string): Promise<Record<string, unknown>> {
   const raw = await fs.readFile(path.join(contentDir, slug, "novel.json"), "utf8");
   return JSON.parse(raw);
 }
+
+describe("EPUB cover discovery", () => {
+  it("follows the EPUB 2 <meta name=\"cover\"> declaration", () => {
+    const opf = '<meta name="cover" content="cover-image"/>';
+    const manifest = new Map([["cover-image", { href: "cover.jpg", type: "image/jpeg" }]]);
+    assert.deepEqual(ingest.findCoverHref(opf, manifest), {
+      href: "cover.jpg",
+      mediaType: "image/jpeg",
+    });
+  });
+
+  it("follows the EPUB 3 properties=\"cover-image\" attribute", () => {
+    const opf = '<item id="img" href="art.png" media-type="image/png" properties="cover-image"/>';
+    assert.deepEqual(ingest.findCoverHref(opf, new Map()), {
+      href: "art.png",
+      mediaType: "image/png",
+    });
+  });
+
+  it("never mistakes a cover.xhtml wrapper page for the cover image", () => {
+    // Many EPUBs ship both a wrapper page and the image. Returning the page would
+    // write an HTML document into public/covers/ and show a broken cover.
+    const opf = '<meta name="cover" content="cover"/>';
+    const htmlOnly = new Map([
+      ["cover", { href: "cover.xhtml", type: "application/xhtml+xml" }],
+    ]);
+    assert.equal(ingest.findCoverHref(opf, htmlOnly), null);
+  });
+
+  it("falls back to a manifest image whose name says cover", () => {
+    const manifest = new Map([
+      ["ch1", { href: "ch1.xhtml", type: "application/xhtml+xml" }],
+      ["art", { href: "images/the-cover.jpeg", type: "image/jpeg" }],
+    ]);
+    assert.deepEqual(ingest.findCoverHref("<package/>", manifest), {
+      href: "images/the-cover.jpeg",
+      mediaType: "image/jpeg",
+    });
+  });
+
+  it("returns null when the book has no cover", () => {
+    const manifest = new Map([["ch1", { href: "ch1.xhtml", type: "application/xhtml+xml" }]]);
+    assert.equal(ingest.findCoverHref("<package/>", manifest), null);
+  });
+
+  it("maps a media type, then the file name, to an extension", () => {
+    assert.equal(ingest.coverExtension("cover.jpg", "image/jpeg"), ".jpg");
+    assert.equal(ingest.coverExtension("art", "image/png"), ".png");
+    assert.equal(ingest.coverExtension("art.JPEG", ""), ".jpeg");
+    assert.equal(ingest.coverExtension("mystery", "application/octet-stream"), ".jpg");
+  });
+});
 
 before(async () => {
   scratch = await fs.mkdtemp(path.join(os.tmpdir(), "folio-ingest-"));

@@ -44,3 +44,17 @@ yarn-error.log*
 # cached RanobeDB cover images (derived — safe to delete)
 /data/covers/
 next-env.d.ts
+
+# Personal library. Books you import are usually not yours to redistribute, and
+# this repository is public — so only the two demo novels that ship with the
+# project are tracked. If your own repository is private and you want your
+# library in it, delete the two /content/* rules below.
+/content/*
+!/content/signal-drift/
+!/content/the-lantern-between-stars/
+
+# Covers for imported books are the publishers' and artists' artwork, not
+# something this project can redistribute.
+/public/covers/*
+!/public/covers/signal-drift.svg
+!/public/covers/the-lantern-between-stars.svg

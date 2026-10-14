@@ -142,8 +142,13 @@ npm run ingest -- ./books --author "Me" --status ongoing
 
 Bulk behaviour:
 - The **title defaults to the file name**; EPUB embedded `dc:title` / `dc:creator` are used when present.
-- A **sibling image** with the same base name (`book.epub` + `book.jpg`) is copied to
-  `public/covers/` and used as the cover.
+- **Covers are found in this order:** an explicit `--cover` or sidecar path, then a
+  **sibling image** with the same base name (`book.epub` + `book.jpg`), then a cover
+  **embedded in the EPUB**. Both EPUB conventions are read — the EPUB 2
+  `<meta name="cover" content="id">` declaration and the EPUB 3
+  `properties="cover-image"` attribute. A `cover.xhtml` wrapper page is never used:
+  the lookup only accepts image media types, so an HTML document can't end up in
+  `public/covers/`.
 - A **JSON sidecar** next to a book supplies per-book metadata — `book.epub.json`
   or `book.json`:
   ```json
@@ -158,6 +163,19 @@ Supported inputs: `.epub` (spine order, chapter headings preserved), `.md`
 headings, falling back to a single chapter). Text before the first heading is
 folded into chapter one.
 
+**After ingesting, the app has to be told.** Content reads are cached for 30 days,
+and `next start` snapshots `public/` when it boots, so a new book is otherwise
+invisible in `/browse` and on the home page and its cover 404s. The importer
+handles this for you:
+
+- It POSTs to `/api/revalidate-content` afterwards, which drops the content cache.
+  The endpoint only accepts loopback requests.
+- If no server answers — it isn't running, or it is on another port — the script
+  says so. Set `NOVEL_READER_REVALIDATE_URL` to point at the right one, e.g.
+  `http://localhost:3100/api/revalidate-content`.
+- Restarting the server clears the `public/` snapshot; a **rebuild** is what makes
+  the book appear in prerendered listings if the server wasn't running when you
+  ingested it.
 
 ## Catalogue (RanobeDB)
 

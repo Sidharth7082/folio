@@ -46,6 +46,57 @@ const COVERS_DIR = process.env.NOVEL_READER_COVERS_DIR
 const SUPPORTED_EXTENSIONS = new Set([".txt", ".md", ".markdown", ".epub"]);
 const COVER_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif", ".svg"];
 
+/** Image media types an EPUB cover is allowed to be. */
+const COVER_MEDIA_EXTENSIONS = new Map([
+  ["image/jpeg", ".jpg"],
+  ["image/jpg", ".jpg"],
+  ["image/png", ".png"],
+  ["image/webp", ".webp"],
+  ["image/gif", ".gif"],
+  ["image/avif", ".avif"],
+  ["image/svg+xml", ".svg"],
+]);
+
+/** Pick an extension, trusting the OPF's declared media type first. */
+export function coverExtension(href, mediaType) {
+  const fromType = COVER_MEDIA_EXTENSIONS.get(String(mediaType ?? "").toLowerCase());
+  if (fromType) return fromType;
+  const lower = String(href ?? "").toLowerCase();
+  return COVER_EXTENSIONS.find((extension) => lower.endsWith(extension)) ?? ".jpg";
+}
+
+/**
+ * Where the cover image lives inside an EPUB, or null.
+ *
+ * Handles both conventions: the EPUB 2 `<meta name="cover" content="id">`
+ * declaration and the EPUB 3 `properties="cover-image"` attribute. The last
+ * fallback deliberately skips non-image items — many EPUBs ship a `cover.xhtml`
+ * wrapper page, and picking that would write an HTML document as the cover.
+ */
+export function findCoverHref(opf, manifest) {
+  const metaId = /<meta\b[^>]*\bname="cover"[^>]*\bcontent="([^"]+)"/i.exec(opf)?.[1];
+  if (metaId && manifest.has(metaId)) {
+    const item = manifest.get(metaId);
+    if (item.type.startsWith("image/")) return { href: item.href, mediaType: item.type };
+  }
+
+  for (const match of opf.matchAll(/<item\b[^>]*>/g)) {
+    const tag = match[0];
+    if (!/\bproperties="[^"]*\bcover-image\b/.test(tag)) continue;
+    const href = /\bhref="([^"]+)"/.exec(tag)?.[1];
+    const type = /\bmedia-type="([^"]+)"/.exec(tag)?.[1] ?? "";
+    if (href && type.startsWith("image/")) return { href, mediaType: type };
+  }
+
+  for (const [id, item] of manifest) {
+    if (!item.type.startsWith("image/")) continue;
+    if (/cover/i.test(id) || /cover/i.test(item.href)) {
+      return { href: item.href, mediaType: item.type };
+    }
+  }
+  return null;
+}
+
 const CHAPTER_HEADING =
   /^\s{0,3}(chapter\s+[0-9ivxlcdm]+|prologue|epilogue|interlude|part\s+[0-9ivxlcdm]+)\b.*$/i;
 
@@ -211,6 +262,21 @@ async function readEpub(file) {
 
   const documents = spine.length > 0 ? spine : [...manifest.values()].map((item) => item.href);
 
+  // The cover lives in the archive alongside the chapters and is usually the
+  // only image in the book, so it has to be lifted out separately.
+  let cover = null;
+  const coverInfo = findCoverHref(opf, manifest);
+  if (coverInfo) {
+    const coverPath = path.posix.normalize(path.posix.join(opfDir, coverInfo.href));
+    const coverEntry = zip.getEntry(coverPath);
+    if (coverEntry) {
+      cover = {
+        data: coverEntry.getData(),
+        extension: coverExtension(coverInfo.href, coverInfo.mediaType),
+      };
+    }
+  }
+
   const chapters = [];
   for (const href of documents) {
     if (!/\.x?html?$/i.test(href)) continue;
@@ -231,7 +297,7 @@ async function readEpub(file) {
 
   if (chapters.length === 0) throw new Error("No readable chapters found in EPUB");
 
-  return { chapters, title, author };
+  return { chapters, title, author, cover };
 }
 
 /* -------------------------------------------------------------------------
@@ -359,11 +425,13 @@ export async function ingestOne(file, options = {}) {
   let author = String(pick("author"));
   let chapters;
 
+  let embeddedCover = null;
   if (extension === ".epub") {
     const epub = await readEpub(file);
     title = title || epub.title;
     author = author || epub.author;
     chapters = epub.chapters;
+    embeddedCover = epub.cover ?? null;
   } else {
     const raw = await fs.readFile(file, "utf8");
     const format = extension === ".txt" ? "text" : "markdown";
@@ -397,7 +465,8 @@ export async function ingestOne(file, options = {}) {
     };
   }
 
-  // Cover resolution order: explicit flag/sidecar, then a sibling image.
+  // Cover resolution order: explicit flag/sidecar, a sibling image, then a cover
+  // embedded in the book itself.
   let cover = String(pick("cover") || "");
   let copiedCover = null;
   if (!cover) {
@@ -411,6 +480,16 @@ export async function ingestOne(file, options = {}) {
       cover = `/covers/${path.basename(target)}`;
       copiedCover = cover;
     }
+  }
+
+  if (!cover && embeddedCover) {
+    const target = path.join(COVERS_DIR, `${slug}${embeddedCover.extension}`);
+    if (!options.dryRun) {
+      await fs.mkdir(COVERS_DIR, { recursive: true });
+      await fs.writeFile(target, embeddedCover.data);
+    }
+    cover = `/covers/${path.basename(target)}`;
+    copiedCover = cover;
   }
 
   if (!options.dryRun) {
@@ -480,7 +559,7 @@ Bulk metadata: drop a JSON sidecar next to any book (Book.epub.json or
 Book.json) with any of the fields above, e.g.
   { "title": "...", "author": "...", "genres": ["Fantasy"], "synopsis": "..." }`;
 
-function reportSummary(results) {
+async function reportSummary(results) {
   const { ingested, skipped, failed } = results;
   console.log("");
   console.log(
@@ -490,6 +569,7 @@ function reportSummary(results) {
     console.log("");
     for (const failure of failed) console.log(`  ! ${failure.label}: ${failure.error}`);
   }
+  if (ingested.length > 0) await revalidateReader();
 }
 
 async function main() {
@@ -549,7 +629,7 @@ async function main() {
       }
     }
 
-    reportSummary(results);
+    await reportSummary(results);
     if (results.failed.length > 0) process.exitCode = 1;
     return;
   }
@@ -565,6 +645,39 @@ async function main() {
     `${shared.dryRun ? "Would ingest" : "Ingested"} "${result.title}" -> content/${result.slug} ` +
       `(${result.chapterCount} chapter${result.chapterCount === 1 ? "" : "s"}` +
       `${result.cover ? ", cover" : ""})`,
+  );
+  if (!shared.dryRun) await revalidateReader();
+}
+
+/**
+ * Ask a running server to drop its cached content reads.
+ *
+ * Page reads are cached for 30 days, so without this a newly ingested book is
+ * invisible in /browse and on the home page until the app is rebuilt. Best
+ * effort by design: if no server is listening, the book is still ingested and
+ * simply appears after the next build.
+ *
+ * Override the target with NOVEL_READER_REVALIDATE_URL when serving on another
+ * port, e.g. http://localhost:3100/api/revalidate-content.
+ */
+async function revalidateReader() {
+  const url =
+    process.env.NOVEL_READER_REVALIDATE_URL ??
+    "http://localhost:3000/api/revalidate-content";
+
+  try {
+    const response = await fetch(url, { method: "POST", signal: AbortSignal.timeout(2500) });
+    if (response.ok) {
+      console.log("  Asked the running server to refresh its content cache.");
+      return;
+    }
+  } catch {
+    // No server listening, or one too old to have the route.
+  }
+
+  console.log(
+    "  No server answered to refresh its cache — restart or rebuild before this " +
+      "book appears in /browse and on the home page.",
   );
 }
 

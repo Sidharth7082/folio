@@ -12,7 +12,7 @@
  */
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { cacheLife } from "next/cache";
+import { cacheLife, cacheTag } from "next/cache";
 
 import {
   countWords,
@@ -143,6 +143,7 @@ async function loadNovel(slug: string): Promise<NovelWithChapters | null> {
 export async function getNovelSlugs(): Promise<string[]> {
   "use cache";
   cacheLife("max");
+  cacheTag("content");
 
   const entries = await listDirectory(CONTENT_DIR);
   return entries
@@ -156,6 +157,7 @@ export async function getNovelSlugs(): Promise<string[]> {
 export async function listNovels(): Promise<NovelWithChapters[]> {
   "use cache";
   cacheLife("max");
+  cacheTag("content");
 
   const slugs = await getNovelSlugs();
   const novels = await Promise.all(slugs.map((slug) => loadNovel(slug)));
@@ -172,6 +174,7 @@ export async function listNovels(): Promise<NovelWithChapters[]> {
 export async function getNovel(slug: string): Promise<NovelWithChapters | null> {
   "use cache";
   cacheLife("max");
+  cacheTag("content");
 
   if (!/^[a-z0-9-]+$/.test(slug)) return null;
   return loadNovel(slug);
@@ -184,6 +187,7 @@ export async function getChapter(
 ): Promise<{ novel: NovelWithChapters; chapter: Chapter } | null> {
   "use cache";
   cacheLife("max");
+  cacheTag("content");
 
   if (!Number.isInteger(index) || index < 1) return null;
 
@@ -226,6 +230,7 @@ async function readTextFallback(slug: string, chapterSlug: string) {
 export async function listGenres(): Promise<{ tag: string; slug: string; count: number }[]> {
   "use cache";
   cacheLife("max");
+  cacheTag("content");
 
   const novels = await listNovels();
   const counts = new Map<string, number>();
@@ -244,6 +249,7 @@ export async function listGenres(): Promise<{ tag: string; slug: string; count: 
 export async function getNovelsByGenre(genreSlug: string): Promise<NovelWithChapters[]> {
   "use cache";
   cacheLife("max");
+  cacheTag("content");
 
   const novels = await listNovels();
   return novels.filter((novel) =>
