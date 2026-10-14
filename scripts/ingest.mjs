@@ -39,6 +39,17 @@ import { fileURLToPath } from "node:url";
 import { contentDir, coversDir } from "../src/lib/config/paths.ts";
 
 /**
+ * Every path below comes from the operator at run time: the file they dropped
+ * in, the folder they pointed us at, the slug they chose. None of it exists when
+ * the build runs, so the bundler cannot resolve any of it.
+ *
+ * Left alone, static analysis reacts to those dynamic reads by tracing the whole
+ * project into the server output — books, covers and all — which is both useless
+ * and enormous. The `turbopackIgnore` markers on the reads opt out of that. The
+ * files are still found on disk when a request arrives.
+ */
+
+/**
  * Where things live, resolved on use rather than at import time — see
  * `src/lib/config/paths.ts`, which the app uses too.
  */
@@ -347,7 +358,7 @@ export function toGenreList(value) {
 
 async function pathExists(target) {
   try {
-    await fs.access(target);
+    await fs.access(/* turbopackIgnore: true */ target);
     return true;
   } catch {
     return false;
@@ -357,7 +368,7 @@ async function pathExists(target) {
 /** Every ingestable file under a directory, in natural order. */
 export async function discoverFiles(rootDir, { recursive = false } = {}) {
   const found = [];
-  const entries = await fs.readdir(rootDir, { withFileTypes: true });
+  const entries = await fs.readdir(/* turbopackIgnore: true */ rootDir, { withFileTypes: true });
 
   for (const entry of entries) {
     if (entry.name.startsWith(".")) continue;
@@ -376,7 +387,7 @@ export async function discoverFiles(rootDir, { recursive = false } = {}) {
 async function readSidecar(file) {
   const candidates = [`${file}.json`, file.replace(/\.[^.]+$/, ".json")];
   for (const candidate of candidates) {
-    const raw = await fs.readFile(candidate, "utf8").catch(() => null);
+    const raw = await fs.readFile(/* turbopackIgnore: true */ candidate, "utf8").catch(() => null);
     if (raw === null) continue;
     try {
       const parsed = JSON.parse(raw);
@@ -449,7 +460,7 @@ export async function ingestOne(file, options = {}) {
     chapters = epub.chapters;
     embeddedCover = epub.cover ?? null;
   } else {
-    const raw = await fs.readFile(file, "utf8");
+    const raw = await fs.readFile(/* turbopackIgnore: true */ file, "utf8");
     const format = extension === ".txt" ? "text" : "markdown";
     chapters = toChapters(raw, format, title || deriveTitle(file));
   }
@@ -491,7 +502,7 @@ export async function ingestOne(file, options = {}) {
       const target = path.join(coversDir(), `${slug}${sibling.extension.toLowerCase()}`);
       if (!options.dryRun) {
         await fs.mkdir(coversDir(), { recursive: true });
-        await fs.copyFile(sibling.candidate, target);
+        await fs.copyFile(/* turbopackIgnore: true */ sibling.candidate, target);
       }
       cover = `/api/book-cover/${path.basename(target)}`;
       copiedCover = cover;
@@ -514,7 +525,9 @@ export async function ingestOne(file, options = {}) {
     // Preserve the original added date when replacing a novel.
     let addedAt = new Date().toISOString().slice(0, 10);
     if (alreadyPresent) {
-      const existing = await fs.readFile(metadataPath, "utf8").catch(() => null);
+      const existing = await fs
+        .readFile(/* turbopackIgnore: true */ metadataPath, "utf8")
+        .catch(() => null);
       if (existing) {
         try {
           const previous = JSON.parse(existing);
@@ -598,7 +611,7 @@ async function main() {
   }
 
   const target = path.resolve(process.cwd(), input);
-  const stats = await fs.stat(target).catch(() => null);
+  const stats = await fs.stat(/* turbopackIgnore: true */ target).catch(() => null);
   if (!stats) throw new Error(`no such file or folder: ${input}`);
 
   const shared = {

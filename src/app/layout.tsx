@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -22,6 +22,30 @@ export const metadata: Metadata = {
   },
   description:
     "A self-hosted light-novel reading room: browse, read, and track your place.",
+  applicationName: "Folio",
+  // iOS otherwise turns anything resembling a phone number into a tappable
+  // link, which is wrong for prose: "Chapter 41" should not be dialable.
+  formatDetection: { telephone: false, date: false, address: false, email: false },
+  appleWebApp: {
+    capable: true,
+    title: "Folio",
+    statusBarStyle: "default",
+  },
+};
+
+/**
+ * The browser and status-bar colour, per colour scheme.
+ *
+ * Kept beside the manifest, which sets the same ink, so the installed app and
+ * the browser chrome cannot drift apart.
+ */
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f7f4ef" },
+    { media: "(prefers-color-scheme: dark)", color: "#0c0e13" },
+  ],
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
