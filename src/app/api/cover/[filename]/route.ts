@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { coverImageUrl, isSafeCoverFilename } from "@/lib/catalogue/ranobedb-api";
+import { remoteCoverCacheDir } from "@/lib/config/paths";
 
 /**
  * Cover proxy for RanobeDB images.
@@ -15,7 +16,7 @@ import { coverImageUrl, isSafeCoverFilename } from "@/lib/catalogue/ranobedb-api
  */
 export const instant = false;
 
-const CACHE_DIR = path.join(process.cwd(), "data", "covers");
+const CACHE_DIR = remoteCoverCacheDir();
 const MAX_BYTES = 5 * 1024 * 1024;
 const ONE_YEAR = 31_536_000;
 

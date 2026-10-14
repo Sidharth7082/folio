@@ -33,32 +33,15 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
+// Shared with the app so the CLI and the server never disagree about the data
+// root. Paths resolve on use, so NOVEL_READER_* overrides set after import still
+// take effect — which is how the tests redirect into a scratch directory.
+import { contentDir, coversDir } from "../src/lib/config/paths.ts";
+
 /**
- * Where things live, resolved on use rather than at import time.
- *
- * This file is imported by the app's import API route, and a bundler inlines it
- * into a context where `import.meta.dirname` is undefined — resolving at module
- * scope made the entire route fail to load. Falling back to the working
- * directory keeps the CLI identical, since the npm scripts run from the project
- * root.
+ * Where things live, resolved on use rather than at import time — see
+ * `src/lib/config/paths.ts`, which the app uses too.
  */
-function projectRoot() {
-  const here = import.meta.dirname;
-  return here ? path.resolve(here, "..") : process.cwd();
-}
-
-/** Overridable so tests can ingest into a scratch directory. */
-function contentDir() {
-  return process.env.NOVEL_READER_CONTENT_DIR
-    ? path.resolve(process.env.NOVEL_READER_CONTENT_DIR)
-    : path.join(projectRoot(), "content");
-}
-
-function coversDir() {
-  return process.env.NOVEL_READER_COVERS_DIR
-    ? path.resolve(process.env.NOVEL_READER_COVERS_DIR)
-    : path.join(projectRoot(), "public", "covers");
-}
 
 const SUPPORTED_EXTENSIONS = new Set([".txt", ".md", ".markdown", ".epub"]);
 const COVER_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif", ".svg"];
@@ -114,8 +97,24 @@ export function findCoverHref(opf, manifest) {
   return null;
 }
 
+/**
+ * A chapter heading at the start of a line: `Chapter 12`, `PROLOGUE`, `Part ii`,
+ * and the Markdown form `## Chapter 12`.
+ *
+ * The optional hashes matter for plain text. Scraped novels routinely keep the
+ * Markdown markers even when the download is a `.txt`, and without this the
+ * entire book became one chapter named after the file.
+ */
 const CHAPTER_HEADING =
-  /^\s{0,3}(chapter\s+[0-9ivxlcdm]+|prologue|epilogue|interlude|part\s+[0-9ivxlcdm]+)\b.*$/i;
+  /^\s{0,3}#{0,6}\s{0,3}(chapter\s+[0-9ivxlcdm]+|prologue|epilogue|interlude|part\s+[0-9ivxlcdm]+)\b.*$/i;
+
+/** A heading's text, without its Markdown hashes or stray spacing. */
+function headingTitle(line) {
+  return line
+    .trim()
+    .replace(/^#{1,6}\s*/, "")
+    .replace(/\s+/g, " ");
+}
 
 function parseArgs(argv) {
   const options = {};
@@ -182,7 +181,7 @@ function splitByHeadings(text) {
   for (const line of lines) {
     if (CHAPTER_HEADING.test(line) && line.trim().length <= 90) {
       if (current) chapters.push(current);
-      current = { title: line.trim().replace(/\s+/g, " "), body: [] };
+      current = { title: headingTitle(line), body: [] };
     } else if (current) {
       current.body.push(line);
     } else {

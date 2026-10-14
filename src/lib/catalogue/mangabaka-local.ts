@@ -16,14 +16,12 @@
  * The file is only ever opened read-only.
  */
 import { existsSync } from "node:fs";
-import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
+import { mangaBakaDbPath } from "@/lib/config/paths";
 import type { MangaBakaView } from "./mangabaka-api";
 
-export const MANGABAKA_PATH = process.env.NOVEL_READER_MANGABAKA_DB
-  ? path.resolve(process.env.NOVEL_READER_MANGABAKA_DB)
-  : path.join(process.cwd(), "data", "mangabaka.db");
+export const MANGABAKA_PATH = mangaBakaDbPath();
 
 let handle: DatabaseSync | null = null;
 

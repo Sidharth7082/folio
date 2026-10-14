@@ -9,12 +9,11 @@
  * This module only ever opens the file read-only.
  */
 import { existsSync } from "node:fs";
-import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-export const CATALOGUE_PATH = process.env.NOVEL_READER_CATALOGUE_DB
-  ? path.resolve(process.env.NOVEL_READER_CATALOGUE_DB)
-  : path.join(process.cwd(), "data", "catalogue.db");
+import { catalogueDbPath } from "@/lib/config/paths";
+
+export const CATALOGUE_PATH = catalogueDbPath();
 
 let handle: DatabaseSync | null = null;
 

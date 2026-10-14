@@ -39,12 +39,26 @@ interface IngestModule {
 let ingest: IngestModule;
 let scratch: string;
 let batchDir: string;
+let headingsDir: string;
 let contentDir: string;
 let coversDir: string;
 
 async function chapterFiles(slug: string): Promise<string[]> {
   const dir = path.join(contentDir, slug, "chapters");
   return (await fs.readdir(dir)).sort();
+}
+
+/** The `title:` values from each chapter file, in reading order. */
+async function chapterTitles(slug: string): Promise<string[]> {
+  const files = await chapterFiles(slug);
+  return Promise.all(
+    files.map(async (file) => {
+      const raw = await fs.readFile(path.join(contentDir, slug, "chapters", file), "utf8");
+      const front = /^---\r?\n([\s\S]*?)\r?\n---/.exec(raw);
+      const title = front ? /^title:\s*(.*)$/m.exec(front[1]) : null;
+      return title ? title[1].trim().replace(/^"(.*)"$/, "$1") : "";
+    }),
+  );
 }
 
 async function readNovelJson(slug: string): Promise<Record<string, unknown>> {
@@ -104,6 +118,32 @@ describe("EPUB cover discovery", () => {
   });
 });
 
+/**
+ * Scraped novels keep their Markdown markers even when the download is plain
+ * text. Treating those as prose collapsed an entire book into a single chapter
+ * named after the file, which left it unreadable in the reader.
+ */
+describe("Markdown headings inside a .txt", () => {
+  it("splits on them instead of treating the whole file as one chapter", async () => {
+    const result = await ingest.ingestOne(path.join(headingsDir, "hashed.txt"));
+    assert.equal(result.chapterCount, 3);
+  });
+
+  it("strips the hashes and any stray spacing from the titles", async () => {
+    assert.deepEqual(await chapterTitles("hashed"), ["Chapter 1", "Chapter 2", "EPILOGUE"]);
+  });
+
+  it("still folds a heading-less .txt into a single chapter", async () => {
+    const result = await ingest.ingestOne(path.join(headingsDir, "prose.txt"));
+    assert.equal(result.chapterCount, 1);
+  });
+
+  it("does not split on prose that merely mentions a chapter", async () => {
+    const result = await ingest.ingestOne(path.join(headingsDir, "mention.txt"));
+    assert.equal(result.chapterCount, 1);
+  });
+});
+
 before(async () => {
   scratch = await fs.mkdtemp(path.join(os.tmpdir(), "folio-ingest-"));
   contentDir = path.join(scratch, "content");
@@ -139,6 +179,26 @@ before(async () => {
   await fs.writeFile(
     path.join(batchDir, "nested", "gamma.txt"),
     "Chapter 1: Gamma\n\nGamma body.\n",
+    "utf8",
+  );
+
+  // Kept out of `batchDir` so the discovery tests still see exactly the three
+  // books they expect.
+  headingsDir = path.join(scratch, "headings");
+  await fs.mkdir(headingsDir, { recursive: true });
+  await fs.writeFile(
+    path.join(headingsDir, "hashed.txt"),
+    "# Chapter 1\n\nFirst body.\n\n## Chapter 2\n\nSecond body.\n\n# EPILOGUE\n\nLast body.\n",
+    "utf8",
+  );
+  await fs.writeFile(
+    path.join(headingsDir, "prose.txt"),
+    "One long body of text.\n\nWith no headings anywhere in it.\n",
+    "utf8",
+  );
+  await fs.writeFile(
+    path.join(headingsDir, "mention.txt"),
+    "It was Chapter 3 of the book, he said.\n\nAnd the prose went on.\n",
     "utf8",
   );
 });

@@ -14,6 +14,8 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { cacheLife, cacheTag } from "next/cache";
 
+import { contentDir } from "@/lib/config/paths";
+
 import {
   countWords,
   parseChapterSource,
@@ -29,7 +31,7 @@ import type {
   NovelWithChapters,
 } from "./types";
 
-const CONTENT_DIR = path.join(process.cwd(), "content");
+const CONTENT_DIR = contentDir();
 const CHAPTER_DIR = "chapters";
 const CHAPTER_EXTENSIONS = new Set([".md", ".markdown", ".txt"]);
 

@@ -3,6 +3,8 @@ import path from "node:path";
 
 import { NextResponse } from "next/server";
 
+import { coversDir } from "@/lib/config/paths";
+
 /**
  * Serve a book's own cover from disk.
  *
@@ -27,11 +29,6 @@ const CONTENT_TYPES: Record<string, string> = {
   ".gif": "image/gif",
   ".svg": "image/svg+xml",
 };
-
-function coversDir(): string {
-  const override = process.env.NOVEL_READER_COVERS_DIR;
-  return override ? path.resolve(override) : path.join(process.cwd(), "public", "covers");
-}
 
 export async function GET(
   _request: Request,
