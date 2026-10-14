@@ -1,216 +1,335 @@
 /*
- * The launch screen's behaviour: work out which Folio server to open, and open it.
+ * Folio on a phone, with nothing behind it.
  *
- * No bundler and no plugin imports on purpose. This file is loaded by the WebView
- * as a plain script, before the remote app exists, so anything it depends on has
- * to be either a browser API or the bridge Capacitor injects. The native plugins
- * it does use are reached through that injected bridge and guarded, so the same
- * file also runs in a desktop browser during development.
+ * There is no server and no configuration: books are imported from the device,
+ * parsed on the device, and read on the device. The whole app is this file plus
+ * three small modules.
+ *
+ * Written with no bundler, so it uses only browser APIs and the Capacitor bridge
+ * that is injected at runtime.
  */
 
-const STORAGE_KEY = "folio.server";
+import { readEpub } from "./lib/epub.js";
+import { readPlainText } from "./lib/plain.js";
+import { getBook, listBooks, putBook, saveProgress } from "./lib/store.js";
 
 const els = {
-  connected: document.getElementById("connected"),
-  setup: document.getElementById("setup"),
-  savedUrl: document.getElementById("saved-url"),
-  open: document.getElementById("open"),
-  change: document.getElementById("change"),
-  form: document.getElementById("form"),
-  url: document.getElementById("url"),
-  status: document.getElementById("status"),
-  connect: document.getElementById("connect"),
+  library: document.getElementById("library"),
+  shelf: document.getElementById("shelf"),
+  empty: document.getElementById("empty"),
+  importButton: document.getElementById("import"),
+  file: document.getElementById("file"),
+  reader: document.getElementById("reader"),
+  chapter: document.getElementById("chapter"),
+  readerBook: document.getElementById("reader-book"),
+  readerChapter: document.getElementById("reader-chapter"),
+  closeReader: document.getElementById("close-reader"),
+  prev: document.getElementById("prev"),
+  next: document.getElementById("next"),
+  position: document.getElementById("position"),
+  toast: document.getElementById("toast"),
+  libraryBar: document.getElementById("library-bar"),
 };
 
-/** The Capacitor bridge, when running inside the native shell. */
 const bridge = globalThis.Capacitor;
 
-/**
- * Turn whatever was typed into a usable origin, or null if it cannot be one.
- *
- * People type `192.168.0.193:3100`, which is not a URL — it parses as the scheme
- * `192.168.0.193`. Assuming http for anything without a scheme is what makes the
- * obvious input work.
- */
-function normaliseServer(input) {
-  const trimmed = String(input ?? "").trim();
-  if (!trimmed) return null;
+/** What is open, and the parsed shape of it, cached for this session. */
+const state = {
+  bookId: null,
+  book: null,
+  parsed: null,
+  chapter: 0,
+};
 
-  const hasScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed);
-  const candidate = hasScheme ? trimmed : `http://${trimmed}`;
+let toastTimer = null;
 
-  let parsed;
-  try {
-    parsed = new URL(candidate);
-  } catch {
-    return null;
-  }
-
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
-  if (!parsed.hostname) return null;
-
-  // The URL parser is lenient enough to accept a space in a host, turning
-  // "hello world" into a hostname rather than an error. Left alone that would be
-  // saved and retried on every launch. IPv6 literals keep their brackets here.
-  if (!/^[A-Za-z0-9._~[\]:-]+$/.test(parsed.hostname)) return null;
-
-  // Folio is served from the root of its origin, so a path here is a mistake
-  // (usually a copy-paste of a page URL). Drop it rather than 404 later.
-  return parsed.origin;
+function toast(message, ms = 2600) {
+  els.toast.textContent = message;
+  els.toast.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    els.toast.hidden = true;
+  }, ms);
 }
 
-/**
- * Is something actually serving Folio at this address?
- *
- * An image load rather than fetch: this page runs on Capacitor's own origin, so a
- * cross-origin fetch would be refused by CORS before it could tell us anything.
- * Image loads are not subject to that, and the icon is a file every build ships.
- */
-function probe(origin, timeoutMs = 6000) {
-  return new Promise((resolve) => {
-    const image = new Image();
-    let settled = false;
+function describeSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB"];
+  let value = bytes / 1024;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value.toFixed(value < 10 ? 1 : 0)} ${units[unit]}`;
+}
 
-    const finish = (ok) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      image.onload = null;
-      image.onerror = null;
-      resolve(ok);
+/* -------------------------------------------------------------------------
+   Import
+   ------------------------------------------------------------------------- */
+
+/**
+ * A stable id from the file's name and size.
+ *
+ * Importing the same book twice replaces it rather than adding a second copy,
+ * which is what someone re-downloading a file actually wants.
+ */
+function idFor(file) {
+  let hash = 0;
+  const key = `${file.name}:${file.size}`;
+  for (let index = 0; index < key.length; index += 1) {
+    hash = (hash * 31 + key.charCodeAt(index)) | 0;
+  }
+  return `b${(hash >>> 0).toString(36)}`;
+}
+
+/** Read an imported file into the shape the library stores. */
+async function parseImport(file) {
+  const bytes = await file.arrayBuffer();
+  const lower = file.name.toLowerCase();
+
+  if (lower.endsWith(".epub")) {
+    const book = await readEpub(bytes);
+    return {
+      title: book.title,
+      author: book.author,
+      chapters: book.chapters,
+      cover: book.cover,
     };
+  }
 
-    const timer = setTimeout(() => finish(false), timeoutMs);
-    image.onload = () => finish(true);
-    image.onerror = () => finish(false);
-    image.src = `${origin}/icons/icon-192.png?_=${Date.now()}`;
-  });
+  if (lower.endsWith(".txt") || lower.endsWith(".md")) {
+    const text = new TextDecoder().decode(bytes);
+    const fallback = file.name.replace(/\.[^.]+$/, "");
+    const { chapters } = readPlainText(text, fallback);
+    return { title: fallback, author: "Unknown author", chapters, cover: null };
+  }
+
+  throw new Error("Folio reads EPUB and plain text (.txt, .md)");
 }
 
-function setStatus(message, tone) {
-  els.status.textContent = message;
-  if (tone) els.status.dataset.tone = tone;
-  else delete els.status.dataset.tone;
-}
+async function importFile(file) {
+  toast(`Importing ${file.name}…`, 60000);
 
-function showSetup({ message = "", tone = "" } = {}) {
-  els.connected.hidden = true;
-  els.setup.hidden = false;
-  setStatus(message, tone);
-  els.url.focus();
-}
-
-function showConnected(server) {
-  els.setup.hidden = true;
-  els.connected.hidden = false;
-  els.savedUrl.textContent = server;
-}
-
-function openFolio(server) {
-  // `assign` rather than `replace` so the hardware back button has somewhere to
-  // return to, which is what makes the address changeable after first run.
-  globalThis.location.assign(server);
-}
-
-function save(server) {
   try {
-    globalThis.localStorage.setItem(STORAGE_KEY, server);
-  } catch {
-    // Private mode or a cleared store. The app still works; it just asks again.
+    const parsed = await parseImport(file);
+    const cover = parsed.cover
+      ? new Blob([parsed.cover.bytes], { type: parsed.cover.type })
+      : null;
+
+    await putBook({
+      id: idFor(file),
+      title: parsed.title,
+      author: parsed.author,
+      chapterCount: parsed.chapters.length,
+      cover,
+      bytes: await file.arrayBuffer(),
+      fileName: file.name,
+      byteSize: file.size,
+      addedAt: new Date().toISOString(),
+      progress: null,
+    });
+
+    await renderLibrary();
+    toast(`Added “${parsed.title}” — ${parsed.chapters.length} chapters`);
+  } catch (error) {
+    toast(`Could not import that: ${error.message}`, 6000);
   }
 }
 
-function load() {
-  try {
-    return globalThis.localStorage.getItem(STORAGE_KEY);
-  } catch {
-    return null;
+/* -------------------------------------------------------------------------
+   Library
+   ------------------------------------------------------------------------- */
+
+async function renderLibrary() {
+  const books = await listBooks();
+
+  els.empty.hidden = books.length > 0;
+  els.shelf.replaceChildren();
+
+  for (const book of books) {
+    const item = document.createElement("li");
+    item.className = "book";
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "book-button";
+    button.addEventListener("click", () => openBook(book.id));
+
+    const cover = document.createElement("div");
+    cover.className = "cover";
+    if (book.cover) {
+      const img = document.createElement("img");
+      img.src = URL.createObjectURL(book.cover);
+      // The object URL is only needed for this render; holding it would leak a
+      // copy of every cover for the life of the app.
+      img.addEventListener("load", () => URL.revokeObjectURL(img.src), { once: true });
+      img.alt = "";
+      cover.append(img);
+    } else {
+      cover.classList.add("cover-blank");
+      cover.append(document.createTextNode(book.title.slice(0, 1).toUpperCase()));
+    }
+
+    const meta = document.createElement("div");
+    meta.className = "book-meta";
+
+    const title = document.createElement("p");
+    title.className = "book-title";
+    title.textContent = book.title;
+
+    const sub = document.createElement("p");
+    sub.className = "book-sub";
+    const parts = [book.author, `${book.chapterCount} chapters`].filter(Boolean);
+    sub.textContent = parts.join(" · ");
+
+    meta.append(title, sub);
+
+    // Show how far in they are, but only once they have actually started.
+    if (book.progress?.chapter) {
+      const read = document.createElement("p");
+      read.className = "book-progress";
+      read.textContent = `Chapter ${book.progress.chapter + 1} of ${book.chapterCount}`;
+      meta.append(read);
+    }
+
+    button.append(cover, meta);
+    item.append(button);
+    els.shelf.append(item);
   }
 }
 
-els.form.addEventListener("submit", async (event) => {
-  event.preventDefault();
+/* -------------------------------------------------------------------------
+   Reader
+   ------------------------------------------------------------------------- */
 
-  const server = normaliseServer(els.url.value);
-  if (!server) {
-    setStatus("That does not look like an address. Try 192.168.0.193:3100.", "bad");
+async function openBook(id) {
+  const book = await getBook(id);
+  if (!book) {
+    toast("That book is no longer in the library");
+    await renderLibrary();
     return;
   }
 
-  els.connect.disabled = true;
-  setStatus(`Looking for Folio at ${server}…`);
+  toast("Opening…", 60000);
 
-  const reachable = await probe(server);
-  els.connect.disabled = false;
+  try {
+    // Parsing takes a second or two for a long novel, so it happens once per
+    // session and the result is kept.
+    if (state.bookId !== id || !state.parsed) {
+      const lower = (book.fileName ?? "").toLowerCase();
+      const parsed = lower.endsWith(".epub")
+        ? await readEpub(book.bytes)
+        : readPlainText(new TextDecoder().decode(book.bytes), book.title);
 
-  if (!reachable) {
-    // Saved anyway, so a server that is merely asleep does not force retyping.
-    save(server);
-    setStatus("Nothing answered there. Check Folio is running and you are on the same Wi-Fi.", "bad");
-    return;
+      state.parsed = parsed;
+      state.bookId = id;
+    }
+
+    state.book = book;
+    state.chapter = Math.min(book.progress?.chapter ?? 0, state.parsed.chapters.length - 1);
+
+    els.readerBook.textContent = book.title;
+    els.library.hidden = true;
+    els.libraryBar.hidden = true;
+    els.reader.hidden = false;
+
+    renderChapter();
+    els.toast.hidden = true;
+  } catch (error) {
+    toast(`Could not open that book: ${error.message}`, 6000);
+  }
+}
+
+function renderChapter() {
+  const chapters = state.parsed.chapters;
+  const chapter = chapters[state.chapter];
+  if (!chapter) return;
+
+  els.readerChapter.textContent = chapter.title ?? "";
+
+  // Built as elements rather than innerHTML: the text comes out of a book file,
+  // and a novel that happens to contain markup should show it as words.
+  const fragment = document.createDocumentFragment();
+  for (const block of chapter.blocks) {
+    const p = document.createElement("p");
+    p.textContent = block;
+    fragment.append(p);
   }
 
-  save(server);
-  setStatus("Connected. Opening…");
-  openFolio(server);
+  els.chapter.replaceChildren(fragment);
+  els.position.textContent = `${state.chapter + 1} / ${chapters.length}`;
+
+  els.prev.disabled = state.chapter === 0;
+  els.next.disabled = state.chapter === chapters.length - 1;
+
+  // A new chapter starts at the top; without this the reader keeps the previous
+  // chapter's scroll offset and opens halfway down.
+  globalThis.scrollTo(0, 0);
+
+  void saveProgress(state.bookId, { chapter: state.chapter, at: Date.now() });
+}
+
+function goToChapter(index) {
+  const chapters = state.parsed?.chapters ?? [];
+  if (index < 0 || index >= chapters.length) return;
+  state.chapter = index;
+  renderChapter();
+}
+
+function closeReader() {
+  els.reader.hidden = true;
+  els.library.hidden = false;
+  els.libraryBar.hidden = false;
+  state.parsed = null;
+  state.bookId = null;
+  state.book = null;
+  void renderLibrary();
+}
+
+/* -------------------------------------------------------------------------
+   Wiring
+   ------------------------------------------------------------------------- */
+
+els.importButton.addEventListener("click", () => els.file.click());
+
+els.file.addEventListener("change", async () => {
+  const file = els.file.files?.[0];
+  // Reset first: a file input keeps its value, so picking the same book again
+  // would otherwise fire no change event at all.
+  els.file.value = "";
+  if (file) await importFile(file);
 });
 
-els.open.addEventListener("click", () => {
-  const server = load();
-  if (server) openFolio(server);
-  else showSetup();
-});
-
-els.change.addEventListener("click", () => {
-  els.url.value = load() ?? "";
-  showSetup();
-});
+els.closeReader.addEventListener("click", closeReader);
+els.prev.addEventListener("click", () => goToChapter(state.chapter - 1));
+els.next.addEventListener("click", () => goToChapter(state.chapter + 1));
 
 /**
- * Native plugins are reached through the injected bridge.
+ * The hardware back button.
  *
- * `@capacitor/app` provides `backButton`. Without a handler, Android closes the
- * app as soon as the WebView cannot go back — which would make leaving a chapter
- * exit Folio. This sends the user to the address screen instead.
+ * Leaving a chapter should return to the library, not close the app — which is
+ * what Android would otherwise do as soon as the WebView cannot go back.
  */
-function wireHardwareBack() {
-  const app = bridge?.Plugins?.App;
-  if (!app?.addListener) return;
+bridge?.Plugins?.App?.addListener?.("backButton", () => {
+  if (!els.reader.hidden) closeReader();
+  else bridge?.Plugins?.App?.exitApp?.();
+});
 
-  app.addListener("backButton", ({ canGoBack }) => {
-    if (canGoBack) {
-      globalThis.history.back();
-      return;
-    }
-    if (els.connected.hidden) {
-      // Already on the address screen, so a second press should leave.
-      app.exitApp?.();
-      return;
-    }
-    els.url.value = load() ?? "";
-    showSetup();
-  });
-}
-
+/** Match the launch colour to the phone's theme rather than guessing dark. */
 function wireStatusBar() {
   const statusBar = bridge?.Plugins?.StatusBar;
   if (!statusBar?.setStyle) return;
 
-  // The launch screen is dark; the remote app sets its own colours on arrival.
-  statusBar.setStyle({ style: "DARK" }).catch(() => {});
-  statusBar.setBackgroundColor?.({ color: "#0c0e13" }).catch(() => {});
+  const light = globalThis.matchMedia?.("(prefers-color-scheme: light)").matches ?? false;
+  statusBar.setStyle({ style: light ? "LIGHT" : "DARK" }).catch(() => {});
+  statusBar.setBackgroundColor?.({ color: light ? "#f7f4ef" : "#0c0e13" }).catch(() => {});
 }
 
-function start() {
-  const saved = load();
-  if (saved) showConnected(saved);
-  else showSetup();
-
-  wireHardwareBack();
+async function start() {
   wireStatusBar();
-
-  // The splash has done its job once there is something to look at.
+  await renderLibrary();
   bridge?.Plugins?.SplashScreen?.hide?.().catch(() => {});
 }
 
-start();
+void start();

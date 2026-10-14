@@ -1,14 +1,14 @@
 /*
- * The launch screen's styling.
+ * Folio's phone styles.
  *
- * Deliberately a copy of the app's own palette rather than a shared import: this
- * page is a local file loaded before anything else exists, so it cannot reach the
- * app's stylesheet or its Tailwind build.
+ * The palette is the same ink and gold the rest of the project uses, so the app
+ * and the website look like one thing. Light and dark both follow the system.
  */
 
 :root {
   --bg: #0c0e13;
   --surface: #141822;
+  --surface-2: #1b2130;
   --fg: #e9ecf3;
   --fg-muted: #9aa4bb;
   --accent: #e6b566;
@@ -20,6 +20,7 @@
   :root {
     --bg: #f7f4ef;
     --surface: #ffffff;
+    --surface-2: #f1ece4;
     --fg: #1d2027;
     --fg-muted: #616a7d;
     --accent: #9a6b18;
@@ -32,159 +33,255 @@
   box-sizing: border-box;
 }
 
-html,
-body {
-  height: 100%;
+html {
+  /* Keeps the reader from bouncing past the end of a chapter on iOS. */
+  overscroll-behavior-y: none;
 }
 
 body {
   margin: 0;
   background: var(--bg);
   color: var(--fg);
-  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* The safe-area padding is what keeps content out from under a notch or the
+     home indicator, which matters because Android 15+ draws the app edge to
+     edge whether or not it asks to. */
+  padding-bottom: env(safe-area-inset-bottom);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ---------------------------------------------------------------- chrome */
+
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
-  justify-content: center;
-  /* Clears notches and home indicators in both orientations. */
-  padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right))
-    max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  gap: 0.75rem;
+  padding: max(0.6rem, env(safe-area-inset-top)) 1rem 0.6rem;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
 }
 
-main {
-  width: 100%;
-  max-width: 26rem;
-  text-align: center;
-}
-
-.mark {
-  width: 88px;
-  height: 88px;
-  margin-bottom: 1rem;
-}
-
-.plate {
-  fill: var(--surface);
-}
-
-.glyph {
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 24;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-h1 {
-  margin: 0 0 1.5rem;
-  font-size: 1.6rem;
-  font-weight: 600;
+.bar h1 {
+  flex: 1;
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 650;
   letter-spacing: -0.01em;
 }
 
-.label {
-  margin: 0;
-  color: var(--fg-muted);
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+.icon-button {
+  flex: none;
+  width: 2.6rem;
+  height: 2.6rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+  background: var(--surface);
+  color: var(--fg);
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
 }
 
-.url {
-  margin: 0.35rem 0 1.25rem;
-  font-size: 1.05rem;
-  font-variant-numeric: tabular-nums;
+.icon-button:disabled {
+  opacity: 0.4;
+}
+
+/* --------------------------------------------------------------- library */
+
+#library {
+  padding: 1rem;
+}
+
+.empty {
+  margin: 4rem 1rem;
+  color: var(--fg-muted);
+  text-align: center;
+  line-height: 1.8;
+}
+
+.empty-face {
+  display: block;
+  margin-bottom: 0.75rem;
+  font-size: 1.6rem;
+  color: var(--accent);
+}
+
+.shelf {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.book-button {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  width: 100%;
+  padding: 0.6rem;
+  border: 1px solid transparent;
+  border-radius: 0.8rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.book-button:active {
+  background: var(--surface);
+  border-color: var(--line);
+}
+
+.cover {
+  flex: none;
+  width: 3.4rem;
+  height: 4.8rem;
+  border-radius: 0.4rem;
+  overflow: hidden;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+
+.cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.cover-blank {
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+.book-meta {
+  min-width: 0;
+}
+
+.book-title {
+  margin: 0;
+  font-weight: 600;
+  /* Long titles should wrap rather than shove the layout sideways. */
   overflow-wrap: anywhere;
 }
 
-.lead {
-  margin: 0 0 1.25rem;
+.book-sub,
+.book-progress {
+  margin: 0.15rem 0 0;
   color: var(--fg-muted);
+  font-size: 0.85rem;
 }
 
-form {
-  display: flex;
-  flex-direction: column;
+.book-progress {
+  color: var(--accent);
+}
+
+/* ---------------------------------------------------------------- reader */
+
+.reader-bar {
   gap: 0.6rem;
 }
 
-input {
-  width: 100%;
-  padding: 0.8rem 0.9rem;
+.reader-titles {
+  min-width: 0;
+}
+
+.reader-book,
+.reader-chapter {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reader-book {
+  font-size: 0.78rem;
+  color: var(--fg-muted);
+}
+
+.reader-chapter {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.chapter {
+  /* Roughly 34em is the comfortable measure for reading; the max-width stops
+     text running the full width of a tablet or a landscape phone. */
+  max-width: 34em;
+  margin: 0 auto;
+  padding: 1.25rem 1.25rem 3rem;
+}
+
+.chapter p {
+  margin: 0 0 1.1em;
+  /* Novel prose is usually justified, but a ragged right edge avoids the
+     rivers that appear when columns are this narrow. */
+  text-align: left;
+  hyphens: auto;
+}
+
+.chapter-nav {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 1rem max(0.7rem, env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--line);
+}
+
+.chapter-nav button {
+  padding: 0.7rem 1.1rem;
   border: 1px solid var(--line);
   border-radius: 0.6rem;
   background: var(--surface);
   color: var(--fg);
-  /* Below 16px, iOS zooms the whole page when the field is focused. */
-  font-size: 16px;
-  font-family: inherit;
-  text-align: center;
-}
-
-input:focus-visible,
-button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-button {
-  width: 100%;
-  padding: 0.85rem 1rem;
-  border-radius: 0.6rem;
-  border: 1px solid transparent;
-  font-size: 1rem;
-  font-family: inherit;
-  font-weight: 600;
+  font: inherit;
+  font-weight: 550;
   cursor: pointer;
 }
 
-.primary {
-  background: var(--accent);
-  color: var(--accent-ink);
-}
-
-.primary:disabled {
-  opacity: 0.55;
+.chapter-nav button:disabled {
+  opacity: 0.35;
   cursor: default;
 }
 
-.ghost {
-  margin-top: 0.6rem;
-  background: transparent;
-  border-color: var(--line);
+.position {
   color: var(--fg-muted);
-  font-weight: 500;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
 }
 
-.status {
-  min-height: 1.5rem;
-  margin: 0.9rem 0 0;
-  color: var(--fg-muted);
+/* ----------------------------------------------------------------- toast */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(1.5rem + env(safe-area-inset-bottom));
+  z-index: 40;
+  max-width: min(30rem, calc(100vw - 2rem));
+  padding: 0.7rem 1rem;
+  border-radius: 0.7rem;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--fg);
   font-size: 0.9rem;
-}
-
-.status[data-tone="bad"] {
-  color: #e5786b;
-}
-
-details {
-  margin-top: 1.75rem;
-  text-align: left;
-  color: var(--fg-muted);
-  font-size: 0.9rem;
-}
-
-summary {
-  cursor: pointer;
-}
-
-details p {
-  margin: 0.6rem 0 0;
-}
-
-code {
-  padding: 0.1rem 0.3rem;
-  border-radius: 0.25rem;
-  background: var(--surface);
-  font-size: 0.85em;
-  overflow-wrap: anywhere;
+  text-align: center;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
 }
