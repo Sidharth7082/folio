@@ -13,6 +13,9 @@
 
 const KEY = "folio.reader";
 
+/** A book's own settings get their own key, so the shared ones stay untouched. */
+const bookKey = (id) => `${KEY}.book.${id}`;
+
 /**
  * Reader themes.
  *
@@ -79,17 +82,54 @@ function sanitise(raw) {
   };
 }
 
-export function loadSettings() {
+/**
+ * Reader settings: the shared ones, or one book's own.
+ *
+ * A book's own settings are stored whole rather than as a list of differences,
+ * because the point of them is that the book keeps looking the way it was set
+ * up whatever happens to the shared settings afterwards. Handing a book id in
+ * is what asks for them; without one this is the settings every book starts
+ * from.
+ */
+export function loadSettings(bookId) {
+  if (bookId) {
+    const own = read(bookKey(bookId));
+    if (own) return own;
+  }
+  return read(KEY) ?? sanitise(null);
+}
+
+/** Whether this book has been given settings of its own. */
+export function hasOwnSettings(bookId) {
+  return Boolean(bookId) && read(bookKey(bookId)) !== null;
+}
+
+export function saveSettings(settings, bookId) {
+  write(bookId ? bookKey(bookId) : KEY, settings);
+}
+
+/** Send a book back to the shared settings. */
+export function forgetBookSettings(bookId) {
+  if (!bookId) return;
   try {
-    return sanitise(JSON.parse(globalThis.localStorage.getItem(KEY) ?? "null"));
+    globalThis.localStorage.removeItem(bookKey(bookId));
   } catch {
-    return sanitise(null);
+    // A blocked store is not worth interrupting anyone over.
   }
 }
 
-export function saveSettings(settings) {
+function read(key) {
   try {
-    globalThis.localStorage.setItem(KEY, JSON.stringify(settings));
+    const raw = globalThis.localStorage.getItem(key);
+    return raw === null ? null : sanitise(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+function write(key, settings) {
+  try {
+    globalThis.localStorage.setItem(key, JSON.stringify(settings));
   } catch {
     // A full or blocked store is not worth interrupting reading over.
   }

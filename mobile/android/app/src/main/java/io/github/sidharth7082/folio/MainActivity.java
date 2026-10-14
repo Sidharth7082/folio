@@ -10,6 +10,7 @@ public class MainActivity extends BridgeActivity {
         // Registered before super.onCreate, which is what builds the bridge and
         // asks every plugin to load.
         registerPlugin(FolioTtsPlugin.class);
+        registerPlugin(FolioClipboardPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

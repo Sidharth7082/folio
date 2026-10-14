@@ -15,6 +15,13 @@
 
     <header class="bar" id="library-bar">
       <h1>Folio</h1>
+      <button id="open-backup" class="icon-button" type="button" aria-label="Backup and restore">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M12 3v9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          <path d="M8 8.5 12 12.5 16 8.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M4 14.5v5h16v-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+        </svg>
+      </button>
       <button id="import" class="icon-button" type="button" aria-label="Import a book">
         <span aria-hidden="true">+</span>
       </button>
@@ -124,6 +131,11 @@
       <div class="sheet-handle" aria-hidden="true"></div>
 
       <div class="sheet-row">
+        <span class="sheet-label">These settings are for</span>
+        <div class="chips" id="scope-chips"></div>
+      </div>
+
+      <div class="sheet-row">
         <span class="sheet-label">Theme</span>
         <div class="chips" id="theme-chips"></div>
       </div>
@@ -209,6 +221,28 @@
       <p class="sheet-hint" id="search-status"></p>
       <ul class="results" id="search-results"></ul>
       <button id="close-search" type="button" class="ghost">Done</button>
+    </section>
+
+    <!--
+      Backup. Deliberately a block of text rather than a file: a WebView cannot
+      write to the phone's storage or share a file without another native plugin,
+      and text can be pasted anywhere at all — a note, a chat, an email to
+      yourself — and pasted back on the next phone.
+    -->
+    <section id="backup" class="sheet" hidden aria-label="Backup">
+      <div class="sheet-handle" aria-hidden="true"></div>
+
+      <p class="sheet-label">Backup</p>
+      <p class="sheet-hint">
+        The settings, each book's own type, and how far you are in each book — not the books
+        themselves, which are megabytes each and already exist as files wherever they came from.
+      </p>
+
+      <textarea id="backup-text" rows="8" spellcheck="false"></textarea>
+      <button id="copy-backup" type="button" class="primary">Copy this</button>
+      <button id="paste-backup" type="button" class="ghost">Paste</button>
+      <button id="restore-backup" type="button" class="ghost">Restore from this text</button>
+      <button id="close-backup" type="button" class="ghost">Done</button>
     </section>
 
     <!-- A plain file input, which the WebView turns into the system picker.

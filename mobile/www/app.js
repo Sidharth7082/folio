@@ -21,6 +21,8 @@ import {
   THEMES,
   applyCustomCss,
   applySettings,
+  forgetBookSettings,
+  hasOwnSettings,
   loadSettings,
   saveSettings,
 } from "./lib/settings.js";
@@ -77,6 +79,14 @@ const els = {
   searchText: document.getElementById("search-text"),
   searchStatus: document.getElementById("search-status"),
   searchResults: document.getElementById("search-results"),
+  scopeChips: document.getElementById("scope-chips"),
+  openBackup: document.getElementById("open-backup"),
+  backup: document.getElementById("backup"),
+  closeBackup: document.getElementById("close-backup"),
+  backupText: document.getElementById("backup-text"),
+  copyBackup: document.getElementById("copy-backup"),
+  pasteBackup: document.getElementById("paste-backup"),
+  restoreBackup: document.getElementById("restore-backup"),
 };
 
 const bridge = globalThis.Capacitor;
@@ -118,10 +128,27 @@ function describeSize(bytes) {
 
 let settings = loadSettings();
 
-function persist() {
-  saveSettings(settings);
+/** Whether the sheet is changing this book's own settings or the shared ones. */
+let settingsScope = "shared";
+
+/** How each setting reads in the sheet. */
+const FORMATS = {
+  textSize: (value) => `${Math.round(value)}px`,
+  lineHeight: (value) => value.toFixed(2),
+  padding: (value) => `${Math.round(value)}px`,
+  speechRate: (value) => `${Number(value.toFixed(2))}×`,
+};
+
+function apply() {
   applySettings(els.reader, settings);
   applyCustomCss(settings.customCss);
+}
+
+function persist() {
+  // Into the book's own key while the sheet is set to this book, and into the
+  // shared one otherwise, which is what makes the two independent.
+  saveSettings(settings, settingsScope === "book" ? state.bookId : undefined);
+  apply();
 }
 
 /** Build the theme and typeface chips once, then mark the chosen one. */
@@ -162,6 +189,33 @@ function renderChips() {
       renderChips();
     }),
   );
+
+  els.scopeChips.replaceChildren(
+    chip("Every book", settingsScope === "shared", () => setScope("shared")),
+    chip("This book", settingsScope === "book", () => setScope("book")),
+  );
+}
+
+/**
+ * Where the settings in the sheet are kept.
+ *
+ * Going back to the shared ones throws away this book's own copy, which is the
+ * only way to say "this book looks like every other book again".
+ */
+function setScope(scope) {
+  if (scope === settingsScope) return;
+  settingsScope = scope;
+
+  if (scope === "shared" && hasOwnSettings(state.bookId)) {
+    forgetBookSettings(state.bookId);
+    settings = loadSettings();
+    toast("This book follows the shared settings again.");
+  } else if (scope === "book") {
+    toast("This book keeps its own settings from now on.");
+  }
+
+  persist();
+  syncSettingsInputs();
 }
 
 function chip(label, active, onClick) {
@@ -174,26 +228,31 @@ function chip(label, active, onClick) {
 }
 
 /** Point a slider at its setting, and keep the readout in step. */
-function wireRange(input, output, key, format) {
+function wireRange(input, output, key) {
   const { min, max, step } = LIMITS[key];
   input.min = String(min);
   input.max = String(max);
   input.step = String(step);
-  input.value = String(settings[key]);
-  output.textContent = format(settings[key]);
+  syncRange(input, output, key);
 
   input.addEventListener("input", () => {
     settings[key] = Number(input.value);
-    output.textContent = format(settings[key]);
+    output.textContent = FORMATS[key](settings[key]);
     persist();
   });
 }
 
+/** Point a slider at its setting without listening to it. */
+function syncRange(input, output, key) {
+  input.value = String(settings[key]);
+  output.textContent = FORMATS[key](settings[key]);
+}
+
 function wireSettings() {
-  wireRange(els.textSize, els.textSizeOut, "textSize", (v) => `${Math.round(v)}px`);
-  wireRange(els.lineHeight, els.lineHeightOut, "lineHeight", (v) => v.toFixed(2));
-  wireRange(els.padding, els.paddingOut, "padding", (v) => `${Math.round(v)}px`);
-  wireRange(els.speechRate, els.speechRateOut, "speechRate", formatRate);
+  wireRange(els.textSize, els.textSizeOut, "textSize");
+  wireRange(els.lineHeight, els.lineHeightOut, "lineHeight");
+  wireRange(els.padding, els.paddingOut, "padding");
+  wireRange(els.speechRate, els.speechRateOut, "speechRate");
 
   // Only once the finger is off the slider: re-speaking on every step of a drag
   // would stutter through the sentence.
@@ -225,6 +284,16 @@ function wireSettings() {
 
   renderChips();
   persist();
+}
+
+/** Point every control in the sheet at the settings currently in force. */
+function syncSettingsInputs() {
+  syncRange(els.textSize, els.textSizeOut, "textSize");
+  syncRange(els.lineHeight, els.lineHeightOut, "lineHeight");
+  syncRange(els.padding, els.paddingOut, "padding");
+  syncRange(els.speechRate, els.speechRateOut, "speechRate");
+  els.customCss.value = settings.customCss;
+  renderChips();
 }
 
 /* -------------------------------------------------------------------------
@@ -486,7 +555,10 @@ async function renderLibrary() {
     if (book.progress?.chapter) {
       const read = document.createElement("p");
       read.className = "book-progress";
-      read.textContent = `Chapter ${book.progress.chapter + 1} of ${book.chapterCount}`;
+      // Clamped: a backup can carry a position from a longer version of the same
+      // book, and "Chapter 8 of 3" is not a thing.
+      const at = Math.min(book.progress.chapter + 1, book.chapterCount);
+      read.textContent = `Chapter ${at} of ${book.chapterCount}`;
       meta.append(read);
     }
 
@@ -533,6 +605,12 @@ async function openBook(id) {
 
     state.book = book;
     state.chapter = Math.min(book.progress?.chapter ?? 0, state.parsed.chapters.length - 1);
+
+    // A book may have typography of its own, and without it, the shared kind.
+    settings = loadSettings(id);
+    settingsScope = hasOwnSettings(id) ? "book" : "shared";
+    apply();
+    syncSettingsInputs();
 
     els.readerBook.textContent = book.title;
     els.library.hidden = true;
@@ -621,7 +699,7 @@ function closeReader() {
    Chapters and search
    ------------------------------------------------------------------------- */
 
-const sheets = [els.settings, els.chapters, els.search];
+const sheets = [els.settings, els.chapters, els.search, els.backup];
 
 /** Only one sheet is open at a time; opening one puts the others away. */
 function openSheet(sheet) {
@@ -759,6 +837,147 @@ function openMatch(match) {
 }
 
 /* -------------------------------------------------------------------------
+   Backup
+   ------------------------------------------------------------------------- */
+
+/**
+ * What a backup holds.
+ *
+ * The settings, each book's own type, and how far into each book you are. Not
+ * the books themselves: they are megabytes each, and the files they came from
+ * are still wherever they came from.
+ */
+async function buildBackup() {
+  const books = await listBooks();
+  const entries = {};
+
+  for (const book of books) {
+    const entry = {};
+    if (book.progress) entry.progress = book.progress;
+    if (hasOwnSettings(book.id)) entry.settings = loadSettings(book.id);
+    if (Object.keys(entry).length) entries[book.id] = entry;
+  }
+
+  return {
+    app: "folio",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    settings: loadSettings(),
+    books: entries,
+  };
+}
+
+async function openBackup() {
+  openSheet(els.backup);
+  els.backupText.value = "Reading the library…";
+  els.backupText.value = JSON.stringify(await buildBackup(), null, 2);
+}
+
+async function copyBackup() {
+  const text = els.backupText.value;
+
+  // The native clipboard first, because the WebView refuses its own.
+  const clipboard = globalThis.Capacitor?.Plugins?.FolioClipboard;
+  if (clipboard) {
+    try {
+      await clipboard.copy({ text });
+      toast("Backup copied to the clipboard.");
+      return;
+    } catch {
+      // Fall through to the browser's own attempts below.
+    }
+  }
+
+  // Selected before anything is attempted: both ways of copying below work off
+  // the selection, and it is also the fallback the user is left with.
+  els.backupText.focus();
+  els.backupText.select();
+
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast("Backup copied to the clipboard.");
+      return;
+    } catch {
+      // WebViews commonly refuse the async clipboard unless the app grants a
+      // native permission, so try the older way before giving up.
+    }
+  }
+
+  if (document.execCommand?.("copy")) {
+    toast("Backup copied to the clipboard.");
+    return;
+  }
+
+  toast("Copying automatically is blocked here — the text is selected, long-press to copy.", 6000);
+}
+
+/** Fill the box from the clipboard, for someone restoring onto a new phone. */
+async function pasteBackup() {
+  const clipboard = globalThis.Capacitor?.Plugins?.FolioClipboard;
+  if (!clipboard) {
+    toast("Pasting needs the native clipboard, which this build does not have.", 6000);
+    return;
+  }
+
+  try {
+    const { text } = await clipboard.read();
+    if (!text) {
+      toast("The clipboard is empty.");
+      return;
+    }
+    els.backupText.value = text;
+    toast("Pasted. Tap Restore to use it.");
+  } catch (error) {
+    toast(error?.message ?? "Could not read the clipboard.", 6000);
+  }
+}
+
+async function restoreBackup() {
+  let data;
+  try {
+    data = JSON.parse(els.backupText.value);
+  } catch {
+    toast("That is not backup text — copy the whole block, exactly.", 6000);
+    return;
+  }
+
+  if (data?.app !== "folio" || !data.books || typeof data.books !== "object") {
+    toast("That is not a Folio backup.", 6000);
+    return;
+  }
+
+  const known = new Set((await listBooks()).map((book) => book.id));
+  let restored = 0;
+  let absent = 0;
+
+  for (const [id, entry] of Object.entries(data.books)) {
+    if (!known.has(id)) {
+      absent += 1;
+      continue;
+    }
+    if (entry?.progress) await saveProgress(id, entry.progress);
+    if (entry?.settings) saveSettings(entry.settings, id);
+    restored += 1;
+  }
+
+  if (data.settings) {
+    saveSettings(data.settings);
+    settings = loadSettings();
+    settingsScope = "shared";
+    apply();
+    syncSettingsInputs();
+  }
+
+  await renderLibrary();
+  toast(
+    `Restored ${restored} ${restored === 1 ? "book" : "books"}` +
+      (absent ? ` — ${absent} are not in this library.` : "."),
+    6000,
+  );
+}
+
+/* -------------------------------------------------------------------------
    Wiring
    ------------------------------------------------------------------------- */
 
@@ -794,6 +1013,12 @@ els.speakRate.addEventListener("click", () => cycleRate());
 els.openChapters.addEventListener("click", openChapterList);
 els.closeChapters.addEventListener("click", closeSheets);
 els.chapterFilter.addEventListener("input", () => renderChapterList(els.chapterFilter.value));
+
+els.openBackup.addEventListener("click", openBackup);
+els.closeBackup.addEventListener("click", closeSheets);
+els.copyBackup.addEventListener("click", copyBackup);
+els.pasteBackup.addEventListener("click", pasteBackup);
+els.restoreBackup.addEventListener("click", restoreBackup);
 
 els.openSearch.addEventListener("click", () => {
   openSheet(els.search);
