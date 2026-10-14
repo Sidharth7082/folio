@@ -244,10 +244,20 @@ body {
 .reader-titles {
   flex: 1;
   min-width: 0;
+  /* A button, so that tapping the titles is how the chapter list is opened. */
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .reader-book,
 .reader-chapter {
+  display: block;
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -316,6 +326,103 @@ body {
   color: var(--theme-onSurfaceVariant, var(--fg-muted));
   font-size: 0.85rem;
   font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------- chapters and search */
+
+/*
+ * Both lists scroll inside the sheet rather than making the sheet taller, so
+ * the filter box and the Done button stay where they are. `overscroll-behavior`
+ * stops a flick at the end of the list from scrolling the chapter behind it.
+ */
+.picker,
+.results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 56dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.pick,
+.result {
+  display: flex;
+  gap: 0.7rem;
+  width: 100%;
+  padding: 0.7rem 0.6rem;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pick-number {
+  flex: none;
+  min-width: 2.4rem;
+  color: var(--fg-muted);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pick-title {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Where you are in a list of a thousand chapters needs to be obvious. */
+.pick-on {
+  background: var(--surface-2);
+  box-shadow: inset 3px 0 0 var(--accent);
+  font-weight: 600;
+}
+
+.result {
+  display: block;
+}
+
+.result-where {
+  display: block;
+  margin-bottom: 0.2rem;
+  color: var(--accent);
+  font-size: 0.78rem;
+}
+
+.result-text {
+  display: block;
+  color: var(--fg-muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.result mark {
+  border-radius: 0.2rem;
+  background: rgb(88 150 220 / 0.35);
+  color: inherit;
+}
+
+/* 16px, because anything smaller makes the phone zoom the page on focus. */
+#chapter-filter,
+#search-text {
+  width: 100%;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--surface-2);
+  color: var(--fg);
+  font: 16px/1.4 system-ui, -apple-system, sans-serif;
+}
+
+#search-status {
+  margin: 0.7rem 0 0.4rem;
+}
+
+/* A search hit is painted in blue, so it cannot be confused with the voice. */
+::highlight(folio-search) {
+  background-color: rgb(88 150 220 / 0.4);
 }
 
 /* ----------------------------------------------------------- read aloud */

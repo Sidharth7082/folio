@@ -35,10 +35,21 @@
           <button id="close-reader" class="icon-button" type="button" aria-label="Back to library">
             <span aria-hidden="true">‹</span>
           </button>
-          <div class="reader-titles">
-            <p id="reader-book" class="reader-book"></p>
-            <p id="reader-chapter" class="reader-chapter"></p>
-          </div>
+
+          <!-- The titles are the way into the chapter list: it is what you would
+               tap if you wanted to be somewhere else in the book. -->
+          <button id="open-chapters" class="reader-titles" type="button" aria-label="Chapter list">
+            <span id="reader-book" class="reader-book"></span>
+            <span id="reader-chapter" class="reader-chapter"></span>
+          </button>
+
+          <button id="open-search" class="icon-button" type="button" aria-label="Search in this book">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="1.8" />
+              <path d="M15 15 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+          </button>
+
           <button id="read-aloud" class="icon-button" type="button" aria-label="Read aloud">
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
               <path d="M3 9v6h4l5 5V4L7 9H3z" />
@@ -167,6 +178,37 @@
       </details>
 
       <button id="close-settings" type="button" class="ghost">Done</button>
+    </section>
+
+    <!--
+      Every chapter in the book. A sheet rather than a page for the same reason
+      the settings are: the reader stays exactly where it was behind it, so
+      closing this puts you back, not somewhere new.
+    -->
+    <section id="chapters" class="sheet" hidden aria-label="Chapters">
+      <div class="sheet-handle" aria-hidden="true"></div>
+
+      <label class="sheet-row" for="chapter-filter">
+        <span class="sheet-label">Chapters <output id="chapter-count"></output></span>
+        <input id="chapter-filter" type="search" autocomplete="off" placeholder="Filter by number or title" />
+      </label>
+
+      <ul class="picker" id="chapter-list"></ul>
+      <button id="close-chapters" type="button" class="ghost">Done</button>
+    </section>
+
+    <!-- Searching the whole book, not just the chapter on screen. -->
+    <section id="search" class="sheet" hidden aria-label="Search in this book">
+      <div class="sheet-handle" aria-hidden="true"></div>
+
+      <label class="sheet-row" for="search-text">
+        <span class="sheet-label">Search in this book</span>
+        <input id="search-text" type="search" autocomplete="off" placeholder="A word or phrase" />
+      </label>
+
+      <p class="sheet-hint" id="search-status"></p>
+      <ul class="results" id="search-results"></ul>
+      <button id="close-search" type="button" class="ghost">Done</button>
     </section>
 
     <!-- A plain file input, which the WebView turns into the system picker.

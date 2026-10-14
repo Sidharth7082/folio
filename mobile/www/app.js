@@ -10,7 +10,9 @@
  */
 
 import { readEpub } from "./lib/epub.js";
+import { paint, rangeFor, unpaint } from "./lib/highlight.js";
 import { readPlainText } from "./lib/plain.js";
+import { findInBook } from "./lib/search.js";
 import { getBook, listBooks, putBook, saveProgress } from "./lib/store.js";
 import { collectChunks, createSpeech, firstAt } from "./lib/tts.js";
 import {
@@ -63,6 +65,18 @@ const els = {
   speechRate: document.getElementById("speech-rate"),
   speechRateOut: document.getElementById("speech-rate-out"),
   advanceChips: document.getElementById("advance-chips"),
+  openChapters: document.getElementById("open-chapters"),
+  chapters: document.getElementById("chapters"),
+  closeChapters: document.getElementById("close-chapters"),
+  chapterFilter: document.getElementById("chapter-filter"),
+  chapterList: document.getElementById("chapter-list"),
+  chapterCount: document.getElementById("chapter-count"),
+  openSearch: document.getElementById("open-search"),
+  search: document.getElementById("search"),
+  closeSearch: document.getElementById("close-search"),
+  searchText: document.getElementById("search-text"),
+  searchStatus: document.getElementById("search-status"),
+  searchResults: document.getElementById("search-results"),
 };
 
 const bridge = globalThis.Capacitor;
@@ -200,13 +214,8 @@ function wireSettings() {
     toast("Custom CSS applied");
   });
 
-  els.openSettings.addEventListener("click", () => {
-    els.settings.hidden = false;
-  });
-
-  els.closeSettings.addEventListener("click", () => {
-    els.settings.hidden = true;
-  });
+  els.openSettings.addEventListener("click", () => openSheet(els.settings));
+  els.closeSettings.addEventListener("click", closeSheets);
 
   // Re-resolve the palette when the device flips between light and dark, which
   // otherwise leaves the System theme showing the old one until a reload.
@@ -317,6 +326,10 @@ async function startSpeaking() {
   // of a chapter they are halfway through.
   const bar = els.reader.querySelector(".reader-bar");
   const from = firstAt(chunks, (bar?.getBoundingClientRect().bottom ?? 0) + 8);
+
+  // The voice paints its own highlight, and a search hit left underneath it
+  // would only be confusing.
+  unpaint("folio-search");
 
   speech.load(chunks);
   speech.start(from);
@@ -489,6 +502,12 @@ async function renderLibrary() {
 
 async function openBook(id) {
   speech.stop();
+  closeSheets();
+
+  // A query from the last book would be answering the wrong question.
+  els.searchText.value = "";
+  els.searchResults.replaceChildren();
+  els.searchStatus.textContent = "";
 
   const book = await getBook(id);
   if (!book) {
@@ -546,6 +565,9 @@ function renderChapter() {
   els.chapter.replaceChildren(fragment);
   els.position.textContent = `${state.chapter + 1} / ${chapters.length}`;
 
+  // A search hit belongs to the chapter it was found in, and this is another one.
+  unpaint("folio-search");
+
   els.prev.disabled = state.chapter === 0;
   els.next.disabled = state.chapter === chapters.length - 1;
 
@@ -564,24 +586,28 @@ function goToChapter(index) {
 }
 
 /**
- * Turning the page by hand.
+ * Go to a chapter: the arrows, the list, or a search result.
  *
  * Someone listening who skips ahead expects to keep listening — stopping dead
  * because the chapter changed would be the wrong kind of surprise.
  */
-function turnChapter(delta) {
-  const target = state.chapter + delta;
-  if (target < 0 || target >= (state.parsed?.chapters.length ?? 0)) return;
+function jumpToChapter(index) {
+  if (index < 0 || index >= (state.parsed?.chapters.length ?? 0)) return;
 
   const before = speech.state();
   if (before.open) speech.stop();
 
-  goToChapter(target);
+  goToChapter(index);
   if (before.playing) speakFromStart();
+}
+
+function turnChapter(delta) {
+  jumpToChapter(state.chapter + delta);
 }
 
 function closeReader() {
   speech.stop();
+  closeSheets();
   els.reader.hidden = true;
   els.library.hidden = false;
   els.libraryBar.hidden = false;
@@ -589,6 +615,147 @@ function closeReader() {
   state.bookId = null;
   state.book = null;
   void renderLibrary();
+}
+
+/* -------------------------------------------------------------------------
+   Chapters and search
+   ------------------------------------------------------------------------- */
+
+const sheets = [els.settings, els.chapters, els.search];
+
+/** Only one sheet is open at a time; opening one puts the others away. */
+function openSheet(sheet) {
+  for (const other of sheets) other.hidden = other !== sheet;
+  sheet.hidden = false;
+}
+
+/** Put away whatever sheet is open. Answers whether there was one. */
+function closeSheets() {
+  let closed = false;
+  for (const sheet of sheets) {
+    if (!sheet.hidden) {
+      sheet.hidden = true;
+      closed = true;
+    }
+  }
+  return closed;
+}
+
+/** Every chapter, filtered by whatever is in the box. */
+function renderChapterList(filter = "") {
+  const chapters = state.parsed?.chapters ?? [];
+  const needle = filter.trim().toLowerCase();
+  const rows = [];
+
+  for (let index = 0; index < chapters.length; index += 1) {
+    const title = chapters[index].title ?? `Chapter ${index + 1}`;
+    if (needle && !`${index + 1} ${title}`.toLowerCase().includes(needle)) continue;
+
+    const number = document.createElement("span");
+    number.className = "pick-number";
+    number.textContent = String(index + 1);
+
+    const label = document.createElement("span");
+    label.className = "pick-title";
+    label.textContent = title;
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = index === state.chapter ? "pick pick-on" : "pick";
+    button.append(number, label);
+    button.addEventListener("click", () => {
+      els.chapters.hidden = true;
+      jumpToChapter(index);
+    });
+
+    const item = document.createElement("li");
+    item.append(button);
+    rows.push(item);
+  }
+
+  els.chapterList.replaceChildren(...rows);
+  els.chapterCount.textContent = needle
+    ? `${rows.length} of ${chapters.length}`
+    : String(chapters.length);
+}
+
+function openChapterList() {
+  els.chapterFilter.value = "";
+  renderChapterList();
+
+  // Opened before it is scrolled: while the sheet is hidden nothing in it has a
+  // height, so a scroll position set first is quietly thrown away.
+  openSheet(els.chapters);
+
+  // Where you are has to be findable in a list of a thousand, so the list opens
+  // with the current chapter in the middle. Setting scrollTop rather than
+  // calling scrollIntoView, so the chapter behind the sheet does not move too.
+  const current = els.chapterList.querySelector(".pick-on");
+  if (current) {
+    const within = current.offsetTop - els.chapterList.offsetTop;
+    els.chapterList.scrollTop = within - els.chapterList.clientHeight / 2;
+  }
+}
+
+/* ---- searching the book ---- */
+
+let searchTimer = null;
+
+function runSearch() {
+  const query = els.searchText.value;
+  const chapters = state.parsed?.chapters ?? [];
+
+  if (query.trim().length < 2) {
+    els.searchResults.replaceChildren();
+    els.searchStatus.textContent = "Two letters or more, and it looks through every chapter.";
+    return;
+  }
+
+  const { matches, total, limited } = findInBook(chapters, query);
+
+  els.searchStatus.textContent =
+    total === 0
+      ? `Nothing matches “${query.trim()}”.`
+      : limited
+        ? `${total} matches — showing the first ${matches.length}.`
+        : `${total} ${total === 1 ? "match" : "matches"}.`;
+
+  els.searchResults.replaceChildren(
+    ...matches.map((match) => {
+      const where = document.createElement("span");
+      where.className = "result-where";
+      where.textContent = chapters[match.chapter]?.title ?? `Chapter ${match.chapter + 1}`;
+
+      const text = document.createElement("span");
+      text.className = "result-text";
+      const hit = document.createElement("mark");
+      hit.textContent = match.hit;
+      text.append(`…${match.before}`, hit, `${match.after}…`);
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "result";
+      button.append(where, text);
+      button.addEventListener("click", () => openMatch(match));
+
+      const item = document.createElement("li");
+      item.append(button);
+      return item;
+    }),
+  );
+}
+
+/** Open the chapter a result came from, at the match. */
+function openMatch(match) {
+  closeSheets();
+  jumpToChapter(match.chapter);
+
+  const block = els.chapter.children[match.block];
+  const range = block && rangeFor(block, match.start, match.end);
+  if (!range || !paint("folio-search", range)) return;
+
+  const rect = range.getBoundingClientRect();
+  globalThis.scrollTo({ top: Math.max(0, globalThis.scrollY + rect.top - 120), behavior: "smooth" });
 }
 
 /* -------------------------------------------------------------------------
@@ -624,6 +791,21 @@ els.speakNext.addEventListener("click", () => speech.next());
 els.speakStop.addEventListener("click", () => speech.stop());
 els.speakRate.addEventListener("click", () => cycleRate());
 
+els.openChapters.addEventListener("click", openChapterList);
+els.closeChapters.addEventListener("click", closeSheets);
+els.chapterFilter.addEventListener("input", () => renderChapterList(els.chapterFilter.value));
+
+els.openSearch.addEventListener("click", () => {
+  openSheet(els.search);
+  els.searchText.focus();
+});
+els.closeSearch.addEventListener("click", closeSheets);
+els.searchText.addEventListener("input", () => {
+  // Waited out, so a fast typist does not search the book once per letter.
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(runSearch, 200);
+});
+
 /**
  * The hardware back button.
  *
@@ -631,10 +813,11 @@ els.speakRate.addEventListener("click", () => cycleRate());
  * what Android would otherwise do as soon as the WebView cannot go back.
  */
 bridge?.Plugins?.App?.addListener?.("backButton", () => {
-  // Settings is a sheet over the reader, and the voice is over the text, so back
-  // puts away whichever of them is on top before it closes the book.
-  if (!els.settings.hidden) els.settings.hidden = true;
-  else if (speech.state().open) speech.stop();
+  // A sheet is on top of everything else, so it is what back puts away first;
+  // then the voice, then the book itself.
+  if (closeSheets()) {
+    // A sheet was open and has just been put away.
+  } else if (speech.state().open) speech.stop();
   else if (!els.reader.hidden) closeReader();
   else bridge?.Plugins?.App?.exitApp?.();
 });

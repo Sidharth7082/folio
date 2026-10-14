@@ -13,6 +13,8 @@
  * sentence rather than the rest of the chapter.
  */
 
+import { paint, rangeFor, textOf, unpaint } from "./highlight.js";
+
 /** Longest sentence worth speaking in one go, for the sake of the highlight. */
 const MAX_CHARS = 240;
 
@@ -42,50 +44,6 @@ const ABBREVIATIONS = new Set([
  * break, so the highlight covers them instead of leaving them behind.
  */
 const BREAK = /([.!?…]+|。|！|？)([)"'”’»」』\]]*)(\s+|(?<=[。！？」』]))/gu;
-
-/** Text nodes of an element, and the string they concatenate into. */
-const MAPS = new WeakMap();
-
-function nodeMap(element) {
-  const cached = MAPS.get(element);
-  if (cached) return cached;
-
-  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-  const nodes = [];
-  let text = "";
-
-  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-    nodes.push({ node, start: text.length, end: text.length + node.data.length });
-    text += node.data;
-  }
-
-  const map = { text, nodes };
-  MAPS.set(element, map);
-  return map;
-}
-
-/** Which text node an offset into the element's text lands in. */
-function locate(map, offset) {
-  for (const entry of map.nodes) {
-    if (offset >= entry.start && offset <= entry.end) {
-      return { node: entry.node, offset: offset - entry.start };
-    }
-  }
-  return null;
-}
-
-/** A DOM range for a chunk, so it can be highlighted or measured. */
-function rangeFor(chunk) {
-  const map = nodeMap(chunk.element);
-  const from = locate(map, chunk.start);
-  const to = locate(map, chunk.end);
-  if (!from || !to) return null;
-
-  const range = document.createRange();
-  range.setStart(from.node, from.offset);
-  range.setEnd(to.node, to.offset);
-  return range;
-}
 
 /** Sentence boundaries in a run of text, as offsets. */
 function sentencesOf(text) {
@@ -170,7 +128,7 @@ function tidy(text, piece) {
 }
 
 function chunksOfElement(element) {
-  const { text } = nodeMap(element);
+  const text = textOf(element);
   if (!text.trim()) return [];
 
   const out = [];
@@ -205,15 +163,11 @@ export function collectChunks(article) {
  */
 export function firstAt(chunks, y) {
   for (let index = 0; index < chunks.length; index += 1) {
-    const rect = rangeFor(chunks[index])?.getBoundingClientRect();
+    const chunk = chunks[index];
+    const rect = rangeFor(chunk.element, chunk.start, chunk.end)?.getBoundingClientRect();
     if (rect && rect.bottom > y) return index;
   }
   return 0;
-}
-
-/** Whether this browser can paint a highlight that is not an element. */
-function canPaint() {
-  return typeof Highlight === "function" && Boolean(globalThis.CSS?.highlights);
 }
 
 /**
@@ -257,33 +211,29 @@ export function createSpeech({
 
   function paintSentence() {
     const chunk = chunks[index];
-    const range = chunk && rangeFor(chunk);
-    if (!range || !canPaint()) return;
-    globalThis.CSS.highlights.set(SAY, new Highlight(range));
+    if (chunk) paint(SAY, rangeFor(chunk.element, chunk.start, chunk.end));
   }
 
   function paintWord({ start, end }) {
     const chunk = chunks[index];
-    if (!chunk || !canPaint()) return;
+    if (!chunk) return;
 
     const length = chunk.end - chunk.start;
     const from = Math.max(0, Math.min(start, length));
     const to = Math.max(from, Math.min(end, length));
     if (to <= from) return;
 
-    const range = rangeFor({ element: chunk.element, start: chunk.start + from, end: chunk.start + to });
-    if (range) globalThis.CSS.highlights.set(WORD, new Highlight(range));
+    paint(WORD, rangeFor(chunk.element, chunk.start + from, chunk.start + to));
   }
 
   function clearPaint() {
-    if (!canPaint()) return;
-    globalThis.CSS.highlights.delete(SAY);
-    globalThis.CSS.highlights.delete(WORD);
+    unpaint(SAY);
+    unpaint(WORD);
   }
 
   /** Keep the sentence being read on screen, without dragging it around. */
   function keepVisible(chunk) {
-    const rect = rangeFor(chunk)?.getBoundingClientRect();
+    const rect = rangeFor(chunk.element, chunk.start, chunk.end)?.getBoundingClientRect();
     if (!rect) return;
 
     const top = 96; // clear of the reader's own bar
@@ -336,7 +286,7 @@ export function createSpeech({
   }
 
   function clearPaintWord() {
-    if (canPaint()) globalThis.CSS.highlights.delete(WORD);
+    unpaint(WORD);
   }
 
   function advance() {
