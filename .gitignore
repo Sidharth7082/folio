@@ -38,4 +38,9 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# imported catalogue database (derived — rebuild with: npm run catalogue:import -- <dump.gz>)
+/data/*.db
+# cached RanobeDB cover images (derived — safe to delete)
+/data/covers/
 next-env.d.ts

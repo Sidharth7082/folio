@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 720" width="480" height="720" role="img" aria-label="Signal Drift cover">
+  <defs>
+    <linearGradient id="void" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#04141a"/>
+      <stop offset="60%" stop-color="#08303a"/>
+      <stop offset="100%" stop-color="#0d4a4f"/>
+    </linearGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6ff2d0" stop-opacity="0"/>
+      <stop offset="70%" stop-color="#6ff2d0" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#6ff2d0" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="480" height="720" fill="url(#void)"/>
+  <g stroke="#6ff2d0" stroke-opacity="0.28" stroke-width="1.4" fill="none">
+    <path d="M-20 200h520"/><path d="M-20 260h520"/><path d="M-20 320h520"/>
+    <path d="M-20 380h520"/><path d="M-20 440h520"/>
+  </g>
+  <g stroke="#8ef7dd" stroke-width="2.4" fill="none" stroke-linecap="round">
+    <path d="M40 470h60l24-46 30 92 26-70 22 36h228" opacity="0.95"/>
+  </g>
+  <g fill="none" stroke="#bdf9e8" stroke-width="3">
+    <circle cx="240" cy="300" r="46"/>
+    <path d="M240 254v-38M240 346v38M194 300h-38M286 300h38"/>
+    <circle cx="240" cy="300" r="14" fill="#6ff2d0" stroke="none"/>
+  </g>
+  <rect x="60" y="120" width="360" height="120" fill="url(#beam)"/>
+  <text x="240" y="118" text-anchor="middle" font-family="Georgia, serif" font-size="40" fill="#e6fffa" letter-spacing="2">SIGNAL</text>
+  <text x="240" y="176" text-anchor="middle" font-family="Georgia, serif" font-size="36" fill="#8ef7dd" letter-spacing="10">DRIFT</text>
+  <text x="240" y="690" text-anchor="middle" font-family="Georgia, serif" font-size="15" fill="#6fae9f" letter-spacing="3">DEMO AUTHOR</text>
+</svg>

@@ -1,26 +1,369 @@
 @import "tailwindcss";
 
+/* ---------------------------------------------------------------------------
+   Application chrome tokens
+   --------------------------------------------------------------------------- */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #0c0e13;
+  --bg-elev: #141822;
+  --bg-elev-2: #1b2130;
+  --fg: #e9ecf3;
+  --fg-muted: #9aa4bb;
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --accent: #e6b566;
+  --accent-ink: #241a07;
+  --ring: rgba(230, 181, 102, 0.45);
+  --shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.75);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+@media (prefers-color-scheme: light) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --bg: #f7f4ef;
+    --bg-elev: #ffffff;
+    --bg-elev-2: #f1ece4;
+    --fg: #1d2027;
+    --fg-muted: #616a7d;
+    --border: rgba(24, 28, 38, 0.1);
+    --border-strong: rgba(24, 28, 38, 0.2);
+    --accent: #9a6b18;
+    --accent-ink: #fff8ea;
+    --ring: rgba(154, 107, 24, 0.4);
+    --shadow: 0 16px 34px -26px rgba(30, 25, 15, 0.4);
   }
 }
 
+/* ---------------------------------------------------------------------------
+   Reader surface tokens, switched by [data-reader-theme]
+   --------------------------------------------------------------------------- */
+[data-reader-theme="dark"] {
+  --reader-bg: #0c0e13;
+  --reader-surface: #171b26;
+  --reader-surface-2: #212837;
+  --reader-fg: #dfe3ec;
+  --reader-fg-muted: #8d96ac;
+  --reader-rule: rgba(255, 255, 255, 0.1);
+  --reader-border: rgba(255, 255, 255, 0.14);
+  --reader-selection: rgba(230, 181, 102, 0.28);
+}
+
+[data-reader-theme="light"] {
+  --reader-bg: #ffffff;
+  --reader-surface: #ffffff;
+  --reader-surface-2: #f2eee7;
+  --reader-fg: #23262d;
+  --reader-fg-muted: #6b7280;
+  --reader-rule: rgba(20, 24, 34, 0.12);
+  --reader-border: rgba(20, 24, 34, 0.16);
+  --reader-selection: rgba(154, 107, 24, 0.2);
+}
+
+[data-reader-theme="sepia"] {
+  --reader-bg: #f6ecd9;
+  --reader-surface: #f1e5cf;
+  --reader-surface-2: #e8d9bd;
+  --reader-fg: #3d3227;
+  --reader-fg-muted: #7d6d57;
+  --reader-rule: rgba(90, 70, 40, 0.2);
+  --reader-border: rgba(90, 70, 40, 0.24);
+  --reader-selection: rgba(160, 110, 20, 0.24);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--bg-elev);
+  --color-surface-2: var(--bg-elev-2);
+  --color-ink: var(--fg);
+  --color-muted: var(--fg-muted);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-serif: ui-serif, Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+}
+
+/* ---------------------------------------------------------------------------
+   Base
+   --------------------------------------------------------------------------- */
+* {
+  border-color: var(--border);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--reader-selection, var(--ring));
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Slim scrollbars that do not fight the reading surface */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+/* ---------------------------------------------------------------------------
+   Reader typography
+   --------------------------------------------------------------------------- */
+.reader-prose p {
+  margin: 0 0 1.15em;
+}
+
+.reader-prose p:first-of-type {
+  margin-top: 0;
+}
+
+.reader-prose p:last-of-type {
+  margin-bottom: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Motion
+   --------------------------------------------------------------------------- */
+@keyframes folio-fade-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 16px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes folio-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes folio-float {
+  0%,
+  100% {
+    transform: translate3d(0, -7px, 0);
+  }
+  50% {
+    transform: translate3d(0, 7px, 0);
+  }
+}
+
+@keyframes folio-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1.1);
+  }
+  50% {
+    transform: translate3d(-2.5%, -2%, 0) scale(1.18);
+  }
+}
+
+@keyframes folio-sheen {
+  from {
+    transform: translateX(-130%) skewX(-18deg);
+  }
+  to {
+    transform: translateX(240%) skewX(-18deg);
+  }
+}
+
+@keyframes folio-bar {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* Staggered entrance for content that is above the fold on first paint. */
+.animate-in {
+  animation: folio-fade-up 0.75s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--delay, 0ms);
+}
+
+.animate-in-soft {
+  animation: folio-fade-in 0.9s ease-out both;
+  animation-delay: var(--delay, 0ms);
+}
+
+.animate-bar {
+  transform-origin: left center;
+  animation: folio-bar 1.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--delay, 0ms);
+}
+
+.float-slow {
+  animation: folio-float 7.5s ease-in-out infinite;
+}
+
+.drift-bg {
+  animation: folio-drift 28s ease-in-out infinite;
+}
+
+/* Scroll reveal: <Reveal> toggles .is-visible when the section enters view. */
+.reveal {
+  opacity: 0;
+  transform: translate3d(0, 24px, 0);
+  transition:
+    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--delay, 0ms);
+}
+
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* Without JavaScript the reveal classes must never hide content. */
+@media (scripting: none) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Components
+   --------------------------------------------------------------------------- */
+
+/* Horizontal, snapping shelf with hidden scrollbar and faded edges. */
+.shelf {
+  scroll-snap-type: x proximity;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.shelf::-webkit-scrollbar {
+  display: none;
+}
+
+.shelf > * {
+  scroll-snap-align: start;
+}
+
+.shelf-fade {
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    black 2rem,
+    black calc(100% - 2rem),
+    transparent 100%
+  );
+}
+
+/* Lift on hover for cards; the parent must carry `group`. */
+.lift {
+  transition:
+    transform 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.35s ease;
+}
+
+.group:hover .lift {
+  transform: translate3d(0, -6px, 0);
+  border-color: var(--border-strong);
+  box-shadow:
+    0 30px 55px -30px rgba(0, 0, 0, 0.85),
+    0 0 0 1px var(--ring);
+}
+
+/* Sweeping highlight for the primary call to action. */
+.sheen {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 45%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  transform: translateX(-130%) skewX(-18deg);
+  pointer-events: none;
+}
+
+.sheen:hover::after {
+  animation: folio-sheen 0.85s ease-out;
+}
+
+/* Hairline rule that grows in, used under section headings. */
+.rule-grow {
+  transform-origin: left center;
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.reveal:not(.is-visible) .rule-grow {
+  transform: scaleX(0);
+}
+
+.grayscale-soft {
+  transition:
+    filter 0.5s ease,
+    opacity 0.5s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-in,
+  .animate-in-soft,
+  .animate-bar,
+  .float-slow,
+  .drift-bg,
+  .sheen:hover::after {
+    animation: none !important;
+  }
+
+  .reveal {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .lift,
+  .group:hover .lift,
+  .rule-grow {
+    transform: none !important;
+    transition: none !important;
+  }
 }
