@@ -222,9 +222,9 @@ describe("ingestOne", () => {
 
   it("picks up a sibling image as the cover", async () => {
     const result = await ingest.ingestOne(path.join(batchDir, "alpha.txt"), { overwrite: true });
-    assert.equal(result.cover, "/covers/alpha.png");
+    assert.equal(result.cover, "/api/book-cover/alpha.png");
     assert.equal(await fs.readFile(path.join(coversDir, "alpha.png"), "utf8"), "fake-image-bytes");
-    assert.equal((await readNovelJson("alpha")).cover, "/covers/alpha.png");
+    assert.equal((await readNovelJson("alpha")).cover, "/api/book-cover/alpha.png");
   });
 
   it("applies sidecar metadata", async () => {

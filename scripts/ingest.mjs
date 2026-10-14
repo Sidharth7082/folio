@@ -494,7 +494,7 @@ export async function ingestOne(file, options = {}) {
         await fs.mkdir(coversDir(), { recursive: true });
         await fs.copyFile(sibling.candidate, target);
       }
-      cover = `/covers/${path.basename(target)}`;
+      cover = `/api/book-cover/${path.basename(target)}`;
       copiedCover = cover;
     }
   }
@@ -505,7 +505,7 @@ export async function ingestOne(file, options = {}) {
       await fs.mkdir(coversDir(), { recursive: true });
       await fs.writeFile(target, embeddedCover.data);
     }
-    cover = `/covers/${path.basename(target)}`;
+    cover = `/api/book-cover/${path.basename(target)}`;
     copiedCover = cover;
   }
 

@@ -1,7 +1,7 @@
 {
   "title": "The Lantern Between Stars",
   "author": "Demo Author",
-  "cover": "/covers/the-lantern-between-stars.svg",
+  "cover": "/api/book-cover/the-lantern-between-stars.svg",
   "synopsis": "Every hundred years the sky-lanterns are lit, and every hundred years one keeper is chosen to carry a flame from the harbour of Orin to the far shore where the stars go to rest. Sela has trained her whole life to be that keeper. What she was never told is that the lantern does not want to be carried. It wants to be listened to.",
   "genres": ["Fantasy", "Adventure", "Mystery"],
   "status": "ongoing",

@@ -1,7 +1,7 @@
 {
   "title": "Signal Drift",
   "author": "Demo Author",
-  "cover": "/covers/signal-drift.svg",
+  "cover": "/api/book-cover/signal-drift.svg",
   "synopsis": "The relay station at Kestrel-9 has one job: repeat what it hears, and nothing more. Junior operator Ivo Ren has been alone on the station for two hundred and six days when the signal arrives — a message in the station's own protocol, sent from the station's own transmitter, timestamped eleven hours from now. Protocol says log it and wait. Protocol has never been so obviously wrong.",
   "genres": ["Science Fiction", "Thriller", "Mystery"],
   "status": "completed",

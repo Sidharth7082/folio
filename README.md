@@ -117,7 +117,15 @@ Second paragraph.
 Paragraphs are separated by blank lines. The leading number sets the reading
 order; the rest of the file name becomes the fallback chapter title.
 
-Covers live in `public/covers/` and are referenced by public path.
+Covers are stored in `public/covers/<slug>.<ext>` and referenced from `novel.json`
+as `/api/book-cover/<slug>.<ext>`.
+
+That indirection is deliberate. A production server builds its list of static
+files when it boots, so anything written into `public/` **after** startup is not
+served — meaning every cover an import produced would 404 until the next restart.
+Reading from disk per request, as `/api/book-cover/<file>` does, avoids that
+entirely. The filename is validated against a strict allowlist before any path is
+built, so a crafted name cannot escape the covers directory.
 
 ### Adding a book from the browser
 
