@@ -30,6 +30,52 @@ npm run dev
 
 Open http://localhost:3000.
 
+## Data sources and rebuilding
+
+**The catalogue databases are deliberately not in this repository.** They are
+derived artefacts, they are large (139 MB + 62 MB), and one of them exceeds
+GitHub's 100 MB per-file limit — but mostly they are *other people's data*, and
+republishing someone else's dataset is a different act from running a script
+against it locally. Both are reproducible from public downloads in about a minute.
+
+| What | Where it comes from | Command | Result |
+| --- | --- | --- | --- |
+| Series, volumes, credits, publishers, releases | [ranobedb.org/database-dumps](https://ranobedb.org/database-dumps) → `rndb-db-public-latest.dump.gz` | `npm run catalogue:import -- <dump.gz>` | `data/catalogue.db`, ~139 MB, 22,966 series |
+| MangaBaka records + the RanobeDB link | [mangabaka.org/data/database](https://mangabaka.org/data/database) → `series.full.json.tar.gz` | `npm run mangabaka:import -- <file>` then `npm run mangabaka:link` | `data/mangabaka.db`, ~62 MB, 26,059 novels |
+
+Run them in that order — the link step reads both databases. Neither script
+downloads anything itself; you fetch the dump, and the script converts it.
+
+```bash
+npm run catalogue:import  -- ~/Downloads/rndb-db-public-latest.dump.gz
+npm run mangabaka:import  -- ~/Downloads/series.full.json.tar.gz
+npm run mangabaka:link
+```
+
+**Nothing here redistributes content.** The dumps are metadata only — titles,
+credits, publishers, release dates, cover *filenames*. There is no novel text in
+any of it, and no chapter is ever stored.
+
+### Licences you inherit
+
+If you deploy this, these follow the data, not the code:
+
+- **RanobeDB** — ODbL-1.0 (database) / DbCL-1.0 (contents). Attribution is
+  required, and redistributing a derived database brings share-alike terms into
+  play. Its API is non-commercial use only.
+- **MangaBaka** — CC BY-NC-SA 4.0: non-commercial, attribution required,
+  share-alike. It also republishes AniList, MyAnimeList, Kitsu, MangaUpdates,
+  Shikimori and Anime-Planet records, and its terms require following each of
+  those providers' own acceptable-use policies.
+
+Attribution for both is rendered in the UI (`CatalogueAttribution`, and the note
+beneath the MangaBaka panel) and should stay there.
+
+**Cover images are never committed.** Covers are fetched on demand by
+`/api/cover/<filename>` and cached in `data/covers/`, which is gitignored — they
+are the publishers' and artists' artwork, not data this project has any licence
+to redistribute.
+
 ## Adding content
 
 Each novel is one folder:
