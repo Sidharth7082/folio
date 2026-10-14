@@ -1,11 +1,15 @@
 # Folio for Android
 
-A phone app for the Folio running on your computer.
+The whole reader, on the phone, with nothing behind it.
 
-It is a thin shell rather than a second copy of the app. On first launch it asks
-for your server's address, remembers it, and opens it full screen from then on.
-That keeps one library in one place instead of two copies to keep in step, and it
-means the phone gets every feature the server has, including ones added later.
+Books are imported from the device, parsed on the device and read on the device.
+There is no server to run and nothing to configure: install it, tap **+**, and
+pick an EPUB or a text file. A novel you are part-way through keeps working in a
+tunnel, on a plane, or with the Wi-Fi off.
+
+It used to be a shell for a Folio server on your own machine, and stopped being
+one deliberately — a reading app that needs a computer running to open a book is
+a reading app that fails at the exact moment you want it.
 
 ## Getting the APK
 
@@ -29,16 +33,25 @@ npm run apk:debug     # → android/app/build/outputs/apk/debug/
 
 ## Using it
 
-Start Folio on your computer and note the `Network:` address it prints, something
-like `http://192.168.0.193:3100`. Type that into the app — the scheme is optional,
-`192.168.0.193:3100` is understood. The phone has to be on the same Wi-Fi.
+Tap **+** to import an EPUB, or a `.txt`/`.md`, from wherever the system picker
+can reach. Books are parsed as they are imported, so opening one later is
+immediate, and importing the same file again replaces it rather than leaving two
+copies. The library remembers how far you got in each book.
 
-Opening a book is the same app you already know. Whatever you add from your
-phone lands in the server's library, and whatever you add on the desktop shows up
-on the phone.
+**Aa** opens the reading settings: theme, typeface, text size, line spacing,
+margins and alignment, plus a box for your own CSS. The variables are the ones
+LNReader documents — `--readerSettings-textSize`, `--theme-primary` and the rest
+— so a stylesheet written for that app applies here unchanged.
 
-To point the app at a different server, press the Android back button while the
-library is showing. It returns to the address screen.
+The speaker button reads the chapter aloud through the phone's own speech engine,
+one sentence at a time. The sentence being spoken is highlighted, and the word
+being spoken inside it more strongly, following the voice as it goes. The bar
+that appears at the bottom skips a sentence at a time, changes speed, and stops.
+By default it reads on into the next chapter; the settings sheet can make it stop
+at the end of one instead.
+
+This needs a text-to-speech engine on the phone, which every normal Android build
+has. If yours does not, the app says so rather than sitting there silent.
 
 ## Signing
 
@@ -58,34 +71,48 @@ To sign properly, set these repository secrets and the workflow picks them up:
 
 ## Why cleartext HTTP is allowed
 
-`AndroidManifest.xml` sets `usesCleartextTraffic="true"`, and that is deliberate.
+`AndroidManifest.xml` sets `usesCleartextTraffic="true"`. That dates from when
+the app fetched from a Folio server over plain HTTP on the local network, and
+Android has blocked cleartext by default since API 28.
 
-Folio is served over plain HTTP on your own network, and Android has blocked
-cleartext by default since API 28 — so without that flag the WebView cannot load
-anything and the app looks broken. A network security config cannot substitute:
-it matches hostnames, and a home network's address is an IP that changes.
-
-The app therefore asks before connecting anywhere, and connects only to the
-address you type.
+The reader itself no longer connects anywhere, so nothing that ships depends on
+it. It is kept for the development switch in `capacitor.config.ts`, which points
+the app at a dev server over `http://` so the reader can be worked on without
+rebuilding the APK for every edit. A build that drops the switch can drop the
+flag with it.
 
 ## Layout
 
 ```
-www/                     the launch screen (plain HTML/CSS/JS, no bundler)
-  index.html             markup, including the mark
-  app.js                 address handling, probing, back button
-  styles.css             colours taken from the app's palette
-capacitor.config.ts      app id, name, splash
+www/                     the app itself (plain HTML/CSS/JS, no bundler)
+  index.html             library, reader, player and settings sheet
+  app.js                 import, library, reader, reading aloud
+  styles.css             the app palette, and the reader's own variables
+  lib/epub.js            EPUB -> metadata and chapters of plain text
+  lib/zip.js             the part of ZIP that an EPUB actually needs
+  lib/plain.js           .txt and .md -> chapters
+  lib/store.js           the library, in IndexedDB
+  lib/settings.js        typography: remembered and applied
+  lib/tts.js             sentences, highlighting, the speech queue
+capacitor.config.ts      app id, name, splash, development server switch
 android/                 generated by `npx cap add android`, then customised
   app/src/main/AndroidManifest.xml    cleartext, as explained above
+  app/src/main/java/.../FolioTtsPlugin.java   the phone's speech engine
   app/src/main/res/                   icons and splash, from `npm run icons`
   app/build.gradle                    signing config
 ```
 
-`www/` has no build step on purpose: it is loaded before anything else exists, so
-it cannot depend on the app's bundle. It does not import the Capacitor plugins
+`www/` has no build step on purpose: it is loaded before anything else exists,
+so it cannot depend on the app's bundle. It does not import Capacitor plugins
 either — it reaches them through the bridge Capacitor injects, guarded, so the
-same file runs in a desktop browser while developing.
+same files run in a desktop browser while developing. On a build with no bridge
+there is simply no voice, and the reader carries on regardless.
+
+The plugin in `app/src/main/java/` is the exception to all of that, and the only
+native code in the project. `speechSynthesis` is undefined inside an Android
+WebView — checked on a device rather than assumed — so there is no way to speak
+from the page at all. The plugin turns one sentence into speech and reports the
+character range being spoken right now, which is what moves the highlight.
 
 ## Icons
 

@@ -12,6 +12,7 @@
 import { readEpub } from "./lib/epub.js";
 import { readPlainText } from "./lib/plain.js";
 import { getBook, listBooks, putBook, saveProgress } from "./lib/store.js";
+import { collectChunks, createSpeech, firstAt } from "./lib/tts.js";
 import {
   FONTS,
   LIMITS,
@@ -51,6 +52,17 @@ const els = {
   paddingOut: document.getElementById("padding-out"),
   customCss: document.getElementById("custom-css"),
   saveCss: document.getElementById("save-css"),
+  readAloud: document.getElementById("read-aloud"),
+  player: document.getElementById("player"),
+  speakPrev: document.getElementById("speak-prev"),
+  speakToggle: document.getElementById("speak-toggle"),
+  speakNext: document.getElementById("speak-next"),
+  speakRate: document.getElementById("speak-rate"),
+  speakStop: document.getElementById("speak-stop"),
+  playerNow: document.getElementById("player-now"),
+  speechRate: document.getElementById("speech-rate"),
+  speechRateOut: document.getElementById("speech-rate-out"),
+  advanceChips: document.getElementById("advance-chips"),
 };
 
 const bridge = globalThis.Capacitor;
@@ -123,6 +135,19 @@ function renderChips() {
   for (const button of els.settings.querySelectorAll("[data-align]")) {
     button.classList.toggle("chip-on", settings.textAlign === button.dataset.align);
   }
+
+  els.advanceChips.replaceChildren(
+    chip("Stop", !settings.speechAdvance, () => {
+      settings.speechAdvance = false;
+      persist();
+      renderChips();
+    }),
+    chip("Keep reading", settings.speechAdvance, () => {
+      settings.speechAdvance = true;
+      persist();
+      renderChips();
+    }),
+  );
 }
 
 function chip(label, active, onClick) {
@@ -154,6 +179,11 @@ function wireSettings() {
   wireRange(els.textSize, els.textSizeOut, "textSize", (v) => `${Math.round(v)}px`);
   wireRange(els.lineHeight, els.lineHeightOut, "lineHeight", (v) => v.toFixed(2));
   wireRange(els.padding, els.paddingOut, "padding", (v) => `${Math.round(v)}px`);
+  wireRange(els.speechRate, els.speechRateOut, "speechRate", formatRate);
+
+  // Only once the finger is off the slider: re-speaking on every step of a drag
+  // would stutter through the sentence.
+  els.speechRate.addEventListener("change", () => speech.refresh());
 
   for (const button of els.settings.querySelectorAll("[data-align]")) {
     button.addEventListener("click", () => {
@@ -186,6 +216,136 @@ function wireSettings() {
 
   renderChips();
   persist();
+}
+
+/* -------------------------------------------------------------------------
+   Reading aloud
+   ------------------------------------------------------------------------- */
+
+/** The speeds the chip steps through; the slider covers everything between. */
+const RATES = [0.75, 1, 1.25, 1.5, 2];
+
+let ttsPlugin = null;
+
+/**
+ * The speech plugin, if this build has one.
+ *
+ * The bridge belongs to the native shell, and on a build without one — the app
+ * opened in an ordinary browser — there is simply no voice. That has to be a
+ * survivable state rather than a crash, so this answers with null. It waits a
+ * moment because the bridge is injected around the time the first script runs.
+ */
+async function findSpeech() {
+  if (ttsPlugin) return ttsPlugin;
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const found = globalThis.Capacitor?.Plugins?.FolioTts;
+    if (found) {
+      ttsPlugin = found;
+      speech.attach(found);
+      return found;
+    }
+    await new Promise((done) => setTimeout(done, 100));
+  }
+
+  return null;
+}
+
+const speech = createSpeech({
+  plugin: () => ttsPlugin,
+  rate: () => settings.speechRate,
+  language: () => state.parsed?.language ?? "",
+  onState: renderPlayer,
+  onError: (message) => toast(message, 5000),
+  onChapterEnd: afterChapterSpoken,
+});
+
+function formatRate(value) {
+  return `${Number(value.toFixed(2))}×`;
+}
+
+function renderPlayer() {
+  const { open, playing, index, total } = speech.state();
+
+  els.player.hidden = !open;
+  els.playerNow.textContent = open ? `${index + 1} / ${total}` : "";
+  els.reader.classList.toggle("reading-aloud", open);
+  els.readAloud.classList.toggle("on", open);
+  if (!open) return;
+
+  els.speakToggle.dataset.state = playing ? "playing" : "paused";
+  els.speakToggle.setAttribute("aria-label", playing ? "Pause reading" : "Carry on reading");
+  els.speakRate.textContent = formatRate(settings.speechRate);
+  els.speakPrev.disabled = index === 0;
+  els.speakNext.disabled = index >= total - 1;
+}
+
+/** Tap the speed chip to step through the presets, wrapping round. */
+function cycleRate() {
+  settings.speechRate = RATES.find((value) => value > settings.speechRate + 0.001) ?? RATES[0];
+  persist();
+
+  // The slider in the settings sheet has to follow, or it would still show the
+  // speed from before the chip was tapped.
+  els.speechRate.value = String(settings.speechRate);
+  els.speechRateOut.textContent = formatRate(settings.speechRate);
+
+  renderPlayer();
+  speech.refresh();
+}
+
+async function startSpeaking() {
+  const engine = await findSpeech();
+  if (!engine) {
+    toast("This build has no speech bridge, so there is nothing to read with.");
+    return;
+  }
+
+  const status = await engine.status().catch(() => null);
+  if (!status?.available) {
+    toast(status?.reason ?? "This phone has no text-to-speech engine.");
+    return;
+  }
+
+  const chunks = collectChunks(els.chapter);
+  if (!chunks.length) {
+    toast("There is nothing in this chapter to read.");
+    return;
+  }
+
+  // Start where the eye already is, rather than sending someone back to the top
+  // of a chapter they are halfway through.
+  const bar = els.reader.querySelector(".reader-bar");
+  const from = firstAt(chunks, (bar?.getBoundingClientRect().bottom ?? 0) + 8);
+
+  speech.load(chunks);
+  speech.start(from);
+}
+
+/** Read the chapter on screen from its first sentence. */
+function speakFromStart() {
+  const chunks = collectChunks(els.chapter);
+  if (!chunks.length) return;
+  speech.load(chunks);
+  speech.start(0);
+}
+
+/** A chapter that ended because it was being listened to, not tapped through. */
+function afterChapterSpoken() {
+  if (!settings.speechAdvance) {
+    speech.stop();
+    toast("End of chapter.");
+    return;
+  }
+
+  if (state.chapter + 1 >= (state.parsed?.chapters.length ?? 0)) {
+    speech.stop();
+    toast("That was the last chapter.");
+    return;
+  }
+
+  goToChapter(state.chapter + 1);
+  speakFromStart();
 }
 
 /* -------------------------------------------------------------------------
@@ -328,6 +488,8 @@ async function renderLibrary() {
    ------------------------------------------------------------------------- */
 
 async function openBook(id) {
+  speech.stop();
+
   const book = await getBook(id);
   if (!book) {
     toast("That book is no longer in the library");
@@ -401,7 +563,25 @@ function goToChapter(index) {
   renderChapter();
 }
 
+/**
+ * Turning the page by hand.
+ *
+ * Someone listening who skips ahead expects to keep listening — stopping dead
+ * because the chapter changed would be the wrong kind of surprise.
+ */
+function turnChapter(delta) {
+  const target = state.chapter + delta;
+  if (target < 0 || target >= (state.parsed?.chapters.length ?? 0)) return;
+
+  const before = speech.state();
+  if (before.open) speech.stop();
+
+  goToChapter(target);
+  if (before.playing) speakFromStart();
+}
+
 function closeReader() {
+  speech.stop();
   els.reader.hidden = true;
   els.library.hidden = false;
   els.libraryBar.hidden = false;
@@ -426,8 +606,23 @@ els.file.addEventListener("change", async () => {
 });
 
 els.closeReader.addEventListener("click", closeReader);
-els.prev.addEventListener("click", () => goToChapter(state.chapter - 1));
-els.next.addEventListener("click", () => goToChapter(state.chapter + 1));
+els.prev.addEventListener("click", () => turnChapter(-1));
+els.next.addEventListener("click", () => turnChapter(1));
+
+els.readAloud.addEventListener("click", () => {
+  if (speech.state().open) speech.stop();
+  else void startSpeaking();
+});
+
+els.speakToggle.addEventListener("click", () => {
+  if (speech.state().playing) speech.pause();
+  else speech.resume();
+});
+
+els.speakPrev.addEventListener("click", () => speech.previous());
+els.speakNext.addEventListener("click", () => speech.next());
+els.speakStop.addEventListener("click", () => speech.stop());
+els.speakRate.addEventListener("click", () => cycleRate());
 
 /**
  * The hardware back button.
@@ -436,8 +631,10 @@ els.next.addEventListener("click", () => goToChapter(state.chapter + 1));
  * what Android would otherwise do as soon as the WebView cannot go back.
  */
 bridge?.Plugins?.App?.addListener?.("backButton", () => {
-  // Settings is a sheet over the reader, so it is what back should close first.
+  // Settings is a sheet over the reader, and the voice is over the text, so back
+  // puts away whichever of them is on top before it closes the book.
   if (!els.settings.hidden) els.settings.hidden = true;
+  else if (speech.state().open) speech.stop();
   else if (!els.reader.hidden) closeReader();
   else bridge?.Plugins?.App?.exitApp?.();
 });
@@ -455,6 +652,9 @@ function wireStatusBar() {
 async function start() {
   wireStatusBar();
   wireSettings();
+  // Resolved up front, so the first tap on Listen does not wait for the bridge
+  // and a build without one finds out immediately.
+  void findSpeech();
   await renderLibrary();
   bridge?.Plugins?.SplashScreen?.hide?.().catch(() => {});
 }

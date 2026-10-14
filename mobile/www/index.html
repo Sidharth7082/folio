@@ -39,12 +39,63 @@
             <p id="reader-book" class="reader-book"></p>
             <p id="reader-chapter" class="reader-chapter"></p>
           </div>
+          <button id="read-aloud" class="icon-button" type="button" aria-label="Read aloud">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M3 9v6h4l5 5V4L7 9H3z" />
+              <path d="M16.5 12A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4z" />
+            </svg>
+          </button>
           <button id="open-settings" class="icon-button" type="button" aria-label="Reading settings">
             <span aria-hidden="true">Aa</span>
           </button>
         </header>
 
         <article id="chapter" class="chapter"></article>
+
+        <!--
+          Read aloud. Sticky to the bottom, in the same slot the chapter nav
+          uses, which is why the nav hides while this is open.
+        -->
+        <div class="player" id="player" role="group" aria-label="Read aloud" hidden>
+          <button id="speak-prev" class="player-button" type="button" aria-label="Previous sentence">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M6 5h2.2v14H6z" />
+              <path d="M20 5v14l-10.6-7z" />
+            </svg>
+          </button>
+
+          <button
+            id="speak-toggle"
+            class="player-button player-play"
+            type="button"
+            data-state="playing"
+            aria-label="Pause reading"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" data-when="playing">
+              <path d="M7 5h3.6v14H7zM13.4 5H17v14h-3.6z" />
+            </svg>
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" data-when="paused">
+              <path d="M8 5l11 7-11 7z" />
+            </svg>
+          </button>
+
+          <button id="speak-next" class="player-button" type="button" aria-label="Next sentence">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M15.8 5H18v14h-2.2z" />
+              <path d="M4 5l10.6 7L4 19z" />
+            </svg>
+          </button>
+
+          <p class="player-now" id="player-now"></p>
+
+          <button id="speak-rate" class="player-chip" type="button" aria-label="Reading speed">1×</button>
+
+          <button id="speak-stop" class="player-button" type="button" aria-label="Stop reading">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M6.4 5l5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6 10.6 12 5 6.4z" />
+            </svg>
+          </button>
+        </div>
 
         <nav class="chapter-nav">
           <button id="prev" type="button">Previous</button>
@@ -92,6 +143,16 @@
           <button type="button" class="chip" data-align="left">Left</button>
           <button type="button" class="chip" data-align="justify">Justified</button>
         </div>
+      </div>
+
+      <label class="sheet-row" for="speech-rate">
+        <span class="sheet-label">Reading aloud speed <output id="speech-rate-out"></output></span>
+        <input id="speech-rate" type="range" />
+      </label>
+
+      <div class="sheet-row">
+        <span class="sheet-label">When a chapter ends</span>
+        <div class="chips" id="advance-chips"></div>
       </div>
 
       <details class="sheet-details">

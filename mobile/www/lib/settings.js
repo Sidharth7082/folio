@@ -44,6 +44,8 @@ export const DEFAULTS = {
   textAlign: "left",
   padding: 20,
   customCss: "",
+  speechRate: 1,
+  speechAdvance: true,
 };
 
 /** Bounds that keep a slider from producing unreadable text. */
@@ -51,6 +53,7 @@ export const LIMITS = {
   textSize: { min: 13, max: 30, step: 1 },
   lineHeight: { min: 1.2, max: 2.2, step: 0.05 },
   padding: { min: 0, max: 48, step: 2 },
+  speechRate: { min: 0.5, max: 2, step: 0.05 },
 };
 
 function clamp(value, { min, max }) {
@@ -69,6 +72,10 @@ function sanitise(raw) {
     textAlign: merge.textAlign === "justify" ? "justify" : "left",
     padding: clamp(Number(merge.padding) ?? DEFAULTS.padding, LIMITS.padding),
     customCss: typeof merge.customCss === "string" ? merge.customCss : "",
+    speechRate: clamp(Number(merge.speechRate) || DEFAULTS.speechRate, LIMITS.speechRate),
+    // Off only when it was explicitly turned off: reading on into the next
+    // chapter is what someone listening to a book wants by default.
+    speechAdvance: merge.speechAdvance !== false,
   };
 }
 
@@ -115,6 +122,11 @@ export function applySettings(element, settings) {
   set("--readerSettings-padding", px(settings.padding));
   set("--readerSettings-fontFamily", font.stack);
 
+  // The two highlights the voice paints, derived from the theme rather than
+  // declared in CSS so that they follow whichever theme is active.
+  set("--folio-speech", fade(resolved.accent, 0.22));
+  set("--folio-speech-word", fade(resolved.accent, 0.5));
+
   set("--theme-primary", resolved.accent);
   set("--theme-onPrimary", resolved.background);
   set("--theme-secondary", resolved.muted);
@@ -133,6 +145,15 @@ export function applySettings(element, settings) {
 function resolveSystemTheme() {
   const light = globalThis.matchMedia?.("(prefers-color-scheme: light)").matches;
   return light ? THEMES.light : THEMES.dark;
+}
+
+/** A hex colour at some transparency, for the highlights. */
+function fade(hex, alpha) {
+  const value = Number.parseInt(hex.slice(1), 16);
+  const red = (value >> 16) & 255;
+  const green = (value >> 8) & 255;
+  const blue = value & 255;
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 }
 
 /**

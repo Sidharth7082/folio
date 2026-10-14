@@ -106,6 +106,13 @@ body {
   opacity: 0.4;
 }
 
+.icon-button svg {
+  display: block;
+  width: 1.15rem;
+  height: 1.15rem;
+  fill: currentColor;
+}
+
 /* --------------------------------------------------------------- library */
 
 #library {
@@ -309,6 +316,115 @@ body {
   color: var(--theme-onSurfaceVariant, var(--fg-muted));
   font-size: 0.85rem;
   font-variant-numeric: tabular-nums;
+}
+
+/* ----------------------------------------------------------- read aloud */
+
+/*
+ * The highlight the voice paints, using the browser's own highlight registry.
+ *
+ * `::highlight()` and a Range, rather than wrapping each sentence in an element:
+ * the chapter is rendered once and never touched again, so nothing about a
+ * book's text or the reader's custom CSS can be disturbed by a highlight
+ * appearing and moving. The colours are set in applySettings(), from the theme.
+ */
+::highlight(folio-speech) {
+  background-color: var(--folio-speech, rgb(230 181 102 / 0.22));
+}
+
+::highlight(folio-speech-word) {
+  background-color: var(--folio-speech-word, rgb(230 181 102 / 0.5));
+}
+
+/* One bar at the bottom at a time: the chapter nav gives way to the player. */
+#reader.reading-aloud .chapter-nav {
+  display: none;
+}
+
+.player {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.5rem 0.6rem max(0.5rem, env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--theme-surface, var(--bg)) 92%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--theme-outline, var(--line));
+  color: var(--theme-onSurface, var(--fg));
+}
+
+.player-button {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid var(--theme-outline, var(--line));
+  border-radius: 0.6rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.player-button svg {
+  display: block;
+  width: 1.1rem;
+  height: 1.1rem;
+  fill: currentColor;
+}
+
+.player-button:disabled {
+  opacity: 0.35;
+}
+
+/* The one filled button, because it is the one that gets tapped most. */
+.player-play {
+  background: var(--theme-primary, var(--accent));
+  border-color: var(--theme-primary, var(--accent));
+  color: var(--theme-onPrimary, var(--accent-ink));
+}
+
+.player-play svg[data-when="paused"] {
+  display: none;
+}
+
+.player-play[data-state="paused"] svg[data-when="playing"] {
+  display: none;
+}
+
+.player-play[data-state="paused"] svg[data-when="paused"] {
+  display: block;
+}
+
+.player-now {
+  flex: 1;
+  margin: 0;
+  padding-left: 0.3rem;
+  color: var(--theme-onSurfaceVariant, var(--fg-muted));
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.player-chip {
+  flex: none;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--theme-outline, var(--line));
+  border-radius: 0.6rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+/* The Listen button, while it is the thing that is on. */
+.reader-bar .icon-button.on {
+  background: var(--theme-primary, var(--accent));
+  border-color: var(--theme-primary, var(--accent));
+  color: var(--theme-onPrimary, var(--accent-ink));
 }
 
 /* ------------------------------------------------------- settings sheet */

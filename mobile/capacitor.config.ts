@@ -1,15 +1,11 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 /**
- * Folio is a server, so this shell does not bundle it.
+ * The phone app: a shell around the reader in `www`.
  *
- * The app asks for your Folio server's address on first launch, remembers it,
- * and opens it full screen afterwards. That keeps the phone app thin, and keeps
- * your library in one place instead of copying it onto the device and then
- * having two of everything to keep in step.
- *
- * There is deliberately no `server.url`. Setting one makes the WebView load the
- * remote page straight away, which leaves nowhere to ask for the address.
+ * Everything happens on the device. Books are imported from the phone, parsed
+ * on it and read on it, so there is nothing to configure and nothing to connect
+ * to — and no `server.url` in a build that ships.
  */
 const config: CapacitorConfig = {
   // The convention for projects with no domain to anchor a reverse-DNS id to.
@@ -20,13 +16,28 @@ const config: CapacitorConfig = {
     // Serve the bundled shell over http, not Capacitor's default https.
     //
     // Verifying on a device showed why this matters: at https://localhost, a
-    // plain-http request to a self-hosted Folio is mixed content, and the WebView
-    // blocks it. Every reachability probe failed with "Failed to fetch", so the
-    // app reported that no server answered even when one was running.
+    // plain-http request is mixed content, and the WebView blocks it outright.
+    // Every reachability probe failed with "Failed to fetch", so the app
+    // reported that no server answered even when one was running.
     //
-    // http://localhost is still a secure context, and the cleartext permission the
-    // manifest already grants covers the rest.
+    // http://localhost is still a secure context, and the cleartext permission
+    // the manifest already grants covers the rest.
     androidScheme: "http",
+
+    // A development-only escape hatch, absent from every build that ships.
+    //
+    // Text-to-speech lives in a native plugin, and Capacitor only injects its
+    // bridge into pages it is itself serving. A dev server is therefore the one
+    // way to have the bridge while editing the reader without rebuilding the
+    // APK for every change. Set FOLIO_LIVE_SERVER to enable it:
+    //
+    //   FOLIO_LIVE_SERVER=http://10.0.2.2:3400 npx cap sync android
+    //
+    // 10.0.2.2 is how the emulator reaches this machine's localhost. The
+    // release build never sets it, and the CI workflow cannot.
+    ...(process.env.FOLIO_LIVE_SERVER
+      ? { url: process.env.FOLIO_LIVE_SERVER, cleartext: true }
+      : {}),
   },
   android: {
     // Matches the app's own background, so the gap before the first paint is not
