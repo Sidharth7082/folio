@@ -13,11 +13,18 @@ local `content/` directory, so you control exactly what is published.
   measure and alignment; keyboard navigation; a filterable table of contents;
   automatic scroll-position restore per chapter.
 - **Library** — save novels and track reading progress across sessions.
-- **Browse** — home shelves (trending, latest updates), genre filtering, search.
+- **Add books** — drag an EPUB, TXT or Markdown file onto `/add`, or point it at a
+  folder and import everything in it. A cover embedded in an EPUB is picked up.
+- **Catalogue** — browse and search metadata for ~23,000 light-novel series:
+  volumes with covers, staff credits, publishers and their imprints, and dated
+  releases. This is a record of what exists, not a source of text.
 - **Discover** — the home page streams live RanobeDB rails: most popular series,
-  upcoming releases, recently released, and new English releases.
-- **Fast** — pages are static shells that stream their live parts in; the reader
-  ships almost no JavaScript beyond the interactive chrome.
+  upcoming releases, recently released, and new English releases. Series pages add
+  a MangaBaka score, which covers far more series than RanobeDB's own rating.
+- **Search** — filter your library by title, author or genre, and jump to the
+  catalogue when what you want is not on your shelf yet.
+- **Fast** — pages are prerendered shells that stream their live parts in; the
+  reader ships almost no JavaScript beyond the interactive chrome.
 - **Motion** — staggered entrances, scroll reveals, hover lifts and snapping
   rails, all CSS-driven and fully disabled under `prefers-reduced-motion`.
 
