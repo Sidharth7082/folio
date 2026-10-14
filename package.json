@@ -14,6 +14,7 @@
     "mangabaka:link": "node --max-old-space-size=4096 --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/link-mangabaka.mjs"
   },
   "dependencies": {
+    "adm-zip": "^0.6.1",
     "next": "16.4.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"
@@ -23,7 +24,6 @@
     "@types/node": "^26.6.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "adm-zip": "^0.6.1",
     "eslint": "^9",
     "eslint-config-next": "16.4.0",
     "tailwindcss": "^4",

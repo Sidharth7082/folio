@@ -119,6 +119,43 @@ order; the rest of the file name becomes the fallback chapter title.
 
 Covers live in `public/covers/` and are referenced by public path.
 
+### Adding a book from the browser
+
+Open **`/add`** and either drop a file on the page or import a folder. This is the
+route for anyone who does not want a terminal.
+
+- **Drag and drop** an `.epub`, `.txt` or `.md` file — or click to choose one.
+- **Import a folder** — drop books into the inbox folder and press one button.
+  Subfolders are included, and one click imports at most 200 books.
+
+Nothing is sent anywhere: the text is written into `content/` and the cover into
+`public/covers/`, both on the machine running the server. Nothing is downloaded.
+
+The **inbox folder** defaults to `~/Documents/lightnovel`, changed with
+`NOVEL_READER_INBOX_DIR`. It is deliberately server-configured and never taken
+from the request — accepting a path from the client would turn a network-facing
+endpoint into a way to walk someone else's filesystem.
+
+#### Who is allowed to import
+
+Importing is the only action that writes files, so it is restricted:
+
+| Request arriving from | No token configured | `NOVEL_READER_UPLOAD_TOKEN` set |
+| --- | --- | --- |
+| This machine | allowed | allowed |
+| Your local network | allowed | needs `x-upload-token` |
+| Anywhere else | refused | needs `x-upload-token` |
+
+Set the token before exposing this app beyond your own network:
+
+```bash
+NOVEL_READER_UPLOAD_TOKEN=some-long-random-value npm run start
+```
+
+Those checks read the `Host` header, which a client can forge, so they guard
+against an accidentally exposed instance rather than being authentication. Uploads
+are capped at 100 MB each.
+
 ### Importing existing files
 
 Single file — EPUB, Markdown, or TXT:

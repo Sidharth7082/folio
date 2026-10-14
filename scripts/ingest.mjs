@@ -33,15 +33,32 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-const ROOT = path.resolve(import.meta.dirname, "..");
+/**
+ * Where things live, resolved on use rather than at import time.
+ *
+ * This file is imported by the app's import API route, and a bundler inlines it
+ * into a context where `import.meta.dirname` is undefined — resolving at module
+ * scope made the entire route fail to load. Falling back to the working
+ * directory keeps the CLI identical, since the npm scripts run from the project
+ * root.
+ */
+function projectRoot() {
+  const here = import.meta.dirname;
+  return here ? path.resolve(here, "..") : process.cwd();
+}
 
 /** Overridable so tests can ingest into a scratch directory. */
-const CONTENT_DIR = process.env.NOVEL_READER_CONTENT_DIR
-  ? path.resolve(process.env.NOVEL_READER_CONTENT_DIR)
-  : path.join(ROOT, "content");
-const COVERS_DIR = process.env.NOVEL_READER_COVERS_DIR
-  ? path.resolve(process.env.NOVEL_READER_COVERS_DIR)
-  : path.join(ROOT, "public", "covers");
+function contentDir() {
+  return process.env.NOVEL_READER_CONTENT_DIR
+    ? path.resolve(process.env.NOVEL_READER_CONTENT_DIR)
+    : path.join(projectRoot(), "content");
+}
+
+function coversDir() {
+  return process.env.NOVEL_READER_COVERS_DIR
+    ? path.resolve(process.env.NOVEL_READER_COVERS_DIR)
+    : path.join(projectRoot(), "public", "covers");
+}
 
 const SUPPORTED_EXTENSIONS = new Set([".txt", ".md", ".markdown", ".epub"]);
 const COVER_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif", ".svg"];
@@ -450,7 +467,7 @@ export async function ingestOne(file, options = {}) {
   const slug = slugify(slugSource);
   if (!slug) throw new Error(`could not derive a slug from "${title}"`);
 
-  const novelDir = path.join(CONTENT_DIR, slug);
+  const novelDir = path.join(contentDir(), slug);
   const metadataPath = path.join(novelDir, "novel.json");
 
   const alreadyPresent = await pathExists(metadataPath);
@@ -472,9 +489,9 @@ export async function ingestOne(file, options = {}) {
   if (!cover) {
     const sibling = await findSiblingCover(file);
     if (sibling) {
-      const target = path.join(COVERS_DIR, `${slug}${sibling.extension.toLowerCase()}`);
+      const target = path.join(coversDir(), `${slug}${sibling.extension.toLowerCase()}`);
       if (!options.dryRun) {
-        await fs.mkdir(COVERS_DIR, { recursive: true });
+        await fs.mkdir(coversDir(), { recursive: true });
         await fs.copyFile(sibling.candidate, target);
       }
       cover = `/covers/${path.basename(target)}`;
@@ -483,9 +500,9 @@ export async function ingestOne(file, options = {}) {
   }
 
   if (!cover && embeddedCover) {
-    const target = path.join(COVERS_DIR, `${slug}${embeddedCover.extension}`);
+    const target = path.join(coversDir(), `${slug}${embeddedCover.extension}`);
     if (!options.dryRun) {
-      await fs.mkdir(COVERS_DIR, { recursive: true });
+      await fs.mkdir(coversDir(), { recursive: true });
       await fs.writeFile(target, embeddedCover.data);
     }
     cover = `/covers/${path.basename(target)}`;
