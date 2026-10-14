@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { NovelGrid } from "@/components/catalog/novel-grid";
@@ -43,9 +44,28 @@ export function NovelSearch({ novels }: NovelSearchProps) {
 
       <div className="mt-6">
         {results.length === 0 ? (
-          <p className="rounded-xl border border-line bg-surface p-6 text-sm text-muted">
-            Nothing matched that search.
-          </p>
+          <div className="rounded-xl border border-line bg-surface p-6 text-sm leading-6">
+            <p className="text-muted">Nothing in your library matched that.</p>
+            {query.trim() ? (
+              /*
+               * Searching for a novel you have not added is the common case, and
+               * "0 results" on its own reads as a broken search. Say what was
+               * searched, and point at the catalogue, which is where a series you
+               * do not own actually lives.
+               */
+              <p className="mt-3 text-muted">
+                This searches only the books you have added, which is {novels.length} right now.
+                To look for something to read, try the catalogue of ~23,000 series:{" "}
+                <Link
+                  href={`/catalogue?q=${encodeURIComponent(query.trim())}`}
+                  className="text-accent hover:underline"
+                >
+                  search the catalogue for “{query.trim()}”
+                </Link>
+                .
+              </p>
+            ) : null}
+          </div>
         ) : (
           <NovelGrid novels={results} priorityCount={4} />
         )}
