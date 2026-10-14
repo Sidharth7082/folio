@@ -16,6 +16,18 @@ const config: CapacitorConfig = {
   appId: "io.github.sidharth7082.folio",
   appName: "Folio",
   webDir: "www",
+  server: {
+    // Serve the bundled shell over http, not Capacitor's default https.
+    //
+    // Verifying on a device showed why this matters: at https://localhost, a
+    // plain-http request to a self-hosted Folio is mixed content, and the WebView
+    // blocks it. Every reachability probe failed with "Failed to fetch", so the
+    // app reported that no server answered even when one was running.
+    //
+    // http://localhost is still a secure context, and the cleartext permission the
+    // manifest already grants covers the rest.
+    androidScheme: "http",
+  },
   android: {
     // Matches the app's own background, so the gap before the first paint is not
     // a white flash in a dark reader.
