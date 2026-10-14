@@ -39,6 +39,9 @@
             <p id="reader-book" class="reader-book"></p>
             <p id="reader-chapter" class="reader-chapter"></p>
           </div>
+          <button id="open-settings" class="icon-button" type="button" aria-label="Reading settings">
+            <span aria-hidden="true">Aa</span>
+          </button>
         </header>
 
         <article id="chapter" class="chapter"></article>
@@ -50,6 +53,60 @@
         </nav>
       </section>
     </main>
+
+    <!--
+      Reading settings. A sheet rather than a page, so the text stays visible
+      behind it and changes can be seen as they are made.
+    -->
+    <section id="settings" class="sheet" hidden aria-label="Reading settings">
+      <div class="sheet-handle" aria-hidden="true"></div>
+
+      <div class="sheet-row">
+        <span class="sheet-label">Theme</span>
+        <div class="chips" id="theme-chips"></div>
+      </div>
+
+      <div class="sheet-row">
+        <span class="sheet-label">Typeface</span>
+        <div class="chips" id="font-chips"></div>
+      </div>
+
+      <label class="sheet-row" for="text-size">
+        <span class="sheet-label">Text size <output id="text-size-out"></output></span>
+        <input id="text-size" type="range" />
+      </label>
+
+      <label class="sheet-row" for="line-height">
+        <span class="sheet-label">Line spacing <output id="line-height-out"></output></span>
+        <input id="line-height" type="range" />
+      </label>
+
+      <label class="sheet-row" for="padding">
+        <span class="sheet-label">Margins <output id="padding-out"></output></span>
+        <input id="padding" type="range" />
+      </label>
+
+      <div class="sheet-row">
+        <span class="sheet-label">Alignment</span>
+        <div class="chips">
+          <button type="button" class="chip" data-align="left">Left</button>
+          <button type="button" class="chip" data-align="justify">Justified</button>
+        </div>
+      </div>
+
+      <details class="sheet-details">
+        <summary>Custom CSS</summary>
+        <p class="sheet-hint">
+          Applied to the chapter text. The reader exposes
+          <code>--readerSettings-textSize</code>, <code>--theme-primary</code> and the
+          other LNReader variables, so styles written for that app work here unchanged.
+        </p>
+        <textarea id="custom-css" rows="6" spellcheck="false" placeholder="#chapter p { text-indent: 2em; }"></textarea>
+        <button id="save-css" type="button" class="primary">Apply</button>
+      </details>
+
+      <button id="close-settings" type="button" class="ghost">Done</button>
+    </section>
 
     <!-- A plain file input, which the WebView turns into the system picker.
          No plugin, and the user picks from wherever their books actually are. -->

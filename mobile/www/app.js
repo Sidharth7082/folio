@@ -12,6 +12,15 @@
 import { readEpub } from "./lib/epub.js";
 import { readPlainText } from "./lib/plain.js";
 import { getBook, listBooks, putBook, saveProgress } from "./lib/store.js";
+import {
+  FONTS,
+  LIMITS,
+  THEMES,
+  applyCustomCss,
+  applySettings,
+  loadSettings,
+  saveSettings,
+} from "./lib/settings.js";
 
 const els = {
   library: document.getElementById("library"),
@@ -29,6 +38,19 @@ const els = {
   position: document.getElementById("position"),
   toast: document.getElementById("toast"),
   libraryBar: document.getElementById("library-bar"),
+  openSettings: document.getElementById("open-settings"),
+  closeSettings: document.getElementById("close-settings"),
+  settings: document.getElementById("settings"),
+  themeChips: document.getElementById("theme-chips"),
+  fontChips: document.getElementById("font-chips"),
+  textSize: document.getElementById("text-size"),
+  textSizeOut: document.getElementById("text-size-out"),
+  lineHeight: document.getElementById("line-height"),
+  lineHeightOut: document.getElementById("line-height-out"),
+  padding: document.getElementById("padding"),
+  paddingOut: document.getElementById("padding-out"),
+  customCss: document.getElementById("custom-css"),
+  saveCss: document.getElementById("save-css"),
 };
 
 const bridge = globalThis.Capacitor;
@@ -62,6 +84,108 @@ function describeSize(bytes) {
     unit += 1;
   }
   return `${value.toFixed(value < 10 ? 1 : 0)} ${units[unit]}`;
+}
+
+/* -------------------------------------------------------------------------
+   Reader settings
+   ------------------------------------------------------------------------- */
+
+let settings = loadSettings();
+
+function persist() {
+  saveSettings(settings);
+  applySettings(els.reader, settings);
+  applyCustomCss(settings.customCss);
+}
+
+/** Build the theme and typeface chips once, then mark the chosen one. */
+function renderChips() {
+  els.themeChips.replaceChildren(
+    ...Object.entries(THEMES).map(([id, theme]) =>
+      chip(theme.label, settings.theme === id, () => {
+        settings.theme = id;
+        persist();
+        renderChips();
+      }),
+    ),
+  );
+
+  els.fontChips.replaceChildren(
+    ...Object.entries(FONTS).map(([id, font]) =>
+      chip(font.label, settings.fontFamily === id, () => {
+        settings.fontFamily = id;
+        persist();
+        renderChips();
+      }),
+    ),
+  );
+
+  for (const button of els.settings.querySelectorAll("[data-align]")) {
+    button.classList.toggle("chip-on", settings.textAlign === button.dataset.align);
+  }
+}
+
+function chip(label, active, onClick) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = active ? "chip chip-on" : "chip";
+  button.textContent = label;
+  button.addEventListener("click", onClick);
+  return button;
+}
+
+/** Point a slider at its setting, and keep the readout in step. */
+function wireRange(input, output, key, format) {
+  const { min, max, step } = LIMITS[key];
+  input.min = String(min);
+  input.max = String(max);
+  input.step = String(step);
+  input.value = String(settings[key]);
+  output.textContent = format(settings[key]);
+
+  input.addEventListener("input", () => {
+    settings[key] = Number(input.value);
+    output.textContent = format(settings[key]);
+    persist();
+  });
+}
+
+function wireSettings() {
+  wireRange(els.textSize, els.textSizeOut, "textSize", (v) => `${Math.round(v)}px`);
+  wireRange(els.lineHeight, els.lineHeightOut, "lineHeight", (v) => v.toFixed(2));
+  wireRange(els.padding, els.paddingOut, "padding", (v) => `${Math.round(v)}px`);
+
+  for (const button of els.settings.querySelectorAll("[data-align]")) {
+    button.addEventListener("click", () => {
+      settings.textAlign = button.dataset.align;
+      persist();
+      renderChips();
+    });
+  }
+
+  els.customCss.value = settings.customCss;
+  els.saveCss.addEventListener("click", () => {
+    settings.customCss = els.customCss.value;
+    persist();
+    toast("Custom CSS applied");
+  });
+
+  els.openSettings.addEventListener("click", () => {
+    els.settings.hidden = false;
+  });
+
+  els.closeSettings.addEventListener("click", () => {
+    els.settings.hidden = true;
+  });
+
+  // Re-resolve the palette when the device flips between light and dark, which
+  // otherwise leaves the System theme showing the old one until a reload.
+  globalThis.matchMedia?.("(prefers-color-scheme: light)").addEventListener?.("change", () => {
+    if (settings.theme === "system") persist();
+  });
+
+  renderChips();
+  persist();
 }
 
 /* -------------------------------------------------------------------------
@@ -312,7 +436,9 @@ els.next.addEventListener("click", () => goToChapter(state.chapter + 1));
  * what Android would otherwise do as soon as the WebView cannot go back.
  */
 bridge?.Plugins?.App?.addListener?.("backButton", () => {
-  if (!els.reader.hidden) closeReader();
+  // Settings is a sheet over the reader, so it is what back should close first.
+  if (!els.settings.hidden) els.settings.hidden = true;
+  else if (!els.reader.hidden) closeReader();
   else bridge?.Plugins?.App?.exitApp?.();
 });
 
@@ -328,6 +454,7 @@ function wireStatusBar() {
 
 async function start() {
   wireStatusBar();
+  wireSettings();
   await renderLibrary();
   bridge?.Plugins?.SplashScreen?.hide?.().catch(() => {});
 }
