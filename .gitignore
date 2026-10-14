@@ -2,6 +2,10 @@
 
 # dependencies
 /node_modules
+# The Android shell keeps its own dependencies. Capacitor's generated
+# android/.gitignore already covers its build output, gradle caches and the
+# keystore; this is the one it cannot, because it sits above that folder.
+/mobile/node_modules/
 /.pnp
 .pnp.*
 .yarn/*

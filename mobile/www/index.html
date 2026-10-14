@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark light" />
+    <title>Folio</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main>
+      <svg class="mark" viewBox="0 0 512 512" aria-hidden="true">
+        <rect width="512" height="512" rx="112" ry="112" class="plate" />
+        <g class="glyph">
+          <path d="M256 176 L256 388" />
+          <path
+            d="M256 176 C232 154 196 144 156 144 C142 144 130 146 118 150 L118 362 C130 358 142 356 156 356 C196 356 232 366 256 388"
+          />
+          <path
+            d="M256 176 C280 154 316 144 356 144 C370 144 382 146 394 150 L394 362 C382 358 370 356 356 356 C316 356 280 366 256 388"
+          />
+        </g>
+      </svg>
+
+      <h1>Folio</h1>
+
+      <!-- A server has been saved before. -->
+      <section id="connected" hidden>
+        <p class="label">Your server</p>
+        <p id="saved-url" class="url"></p>
+        <button id="open" class="primary" type="button">Open Folio</button>
+        <button id="change" class="ghost" type="button">Use a different address</button>
+      </section>
+
+      <!-- First run, or the address is being changed. -->
+      <section id="setup" hidden>
+        <p class="lead">
+          Enter the address of the Folio running on your computer. It is the one the
+          launcher opened.
+        </p>
+
+        <form id="form" novalidate>
+          <input
+            id="url"
+            type="text"
+            inputmode="url"
+            autocapitalize="none"
+            autocomplete="off"
+            autocorrect="off"
+            spellcheck="false"
+            placeholder="192.168.0.193:3100"
+            aria-label="Folio server address"
+          />
+          <button id="connect" class="primary" type="submit">Connect</button>
+        </form>
+
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+
+        <details>
+          <summary>Where do I find this?</summary>
+          <p>
+            Start Folio on your computer and look for the line beginning with
+            <code>Network:</code>. It reads something like
+            <code>http://192.168.0.193:3100</code>. Your phone has to be on the same
+            Wi-Fi as that computer.
+          </p>
+        </details>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

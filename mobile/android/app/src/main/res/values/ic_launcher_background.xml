@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The adaptive launcher icon's background layer. The foreground is the
+         gold mark, drawn in mipmap-*/ic_launcher_foreground.png. -->
+    <color name="ic_launcher_background">#0C0E13</color>
+</resources>

@@ -1,0 +1,190 @@
+/*
+ * The launch screen's styling.
+ *
+ * Deliberately a copy of the app's own palette rather than a shared import: this
+ * page is a local file loaded before anything else exists, so it cannot reach the
+ * app's stylesheet or its Tailwind build.
+ */
+
+:root {
+  --bg: #0c0e13;
+  --surface: #141822;
+  --fg: #e9ecf3;
+  --fg-muted: #9aa4bb;
+  --accent: #e6b566;
+  --accent-ink: #241a07;
+  --line: #232a39;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f7f4ef;
+    --surface: #ffffff;
+    --fg: #1d2027;
+    --fg-muted: #616a7d;
+    --accent: #9a6b18;
+    --accent-ink: #fff8ea;
+    --line: #e2dbd0;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Clears notches and home indicators in both orientations. */
+  padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right))
+    max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+}
+
+main {
+  width: 100%;
+  max-width: 26rem;
+  text-align: center;
+}
+
+.mark {
+  width: 88px;
+  height: 88px;
+  margin-bottom: 1rem;
+}
+
+.plate {
+  fill: var(--surface);
+}
+
+.glyph {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 24;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+h1 {
+  margin: 0 0 1.5rem;
+  font-size: 1.6rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.label {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.url {
+  margin: 0.35rem 0 1.25rem;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.lead {
+  margin: 0 0 1.25rem;
+  color: var(--fg-muted);
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+input {
+  width: 100%;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--surface);
+  color: var(--fg);
+  /* Below 16px, iOS zooms the whole page when the field is focused. */
+  font-size: 16px;
+  font-family: inherit;
+  text-align: center;
+}
+
+input:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button {
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border-radius: 0.6rem;
+  border: 1px solid transparent;
+  font-size: 1rem;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.primary:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.ghost {
+  margin-top: 0.6rem;
+  background: transparent;
+  border-color: var(--line);
+  color: var(--fg-muted);
+  font-weight: 500;
+}
+
+.status {
+  min-height: 1.5rem;
+  margin: 0.9rem 0 0;
+  color: var(--fg-muted);
+  font-size: 0.9rem;
+}
+
+.status[data-tone="bad"] {
+  color: #e5786b;
+}
+
+details {
+  margin-top: 1.75rem;
+  text-align: left;
+  color: var(--fg-muted);
+  font-size: 0.9rem;
+}
+
+summary {
+  cursor: pointer;
+}
+
+details p {
+  margin: 0.6rem 0 0;
+}
+
+code {
+  padding: 0.1rem 0.3rem;
+  border-radius: 0.25rem;
+  background: var(--surface);
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+}

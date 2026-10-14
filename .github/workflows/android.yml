@@ -1,0 +1,97 @@
+name: Android
+
+# Builds the phone app.
+#
+# This is the supported way to produce the APK: a local build needs a full
+# Android SDK and a JDK, and neither is a reasonable thing to ask of someone who
+# just wants the app. Run it from the Actions tab, or push a `v*` tag and the
+# APKs are attached to that release.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      build:
+        description: Which APK to build
+        type: choice
+        options: [debug, release, both]
+        default: release
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    name: Build APK
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      # AGP 8.13 requires 17 or newer; 21 is what it is developed against.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      # The project compiles against SDK 36. The runner image does not ship it.
+      - name: Install Android SDK packages
+        run: sdkmanager --install "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Copies www/ into the Android assets and refreshes the plugin list, so the
+      # shell in the APK matches the sources it was built from.
+      - name: Sync web assets and plugins
+        run: npx cap sync android
+
+      - name: Build APKs
+        run: |
+          cd android
+          chmod +x gradlew
+          case "${{ inputs.build || 'release' }}" in
+            debug)   ./gradlew assembleDebug --no-daemon ;;
+            release) ./gradlew assembleRelease --no-daemon ;;
+            *)       ./gradlew assembleDebug assembleRelease --no-daemon ;;
+          esac
+        env:
+          # Absent unless the repository defines these. Without them the release
+          # build is signed with the debug key, which still installs.
+          FOLIO_KEYSTORE_PATH: ${{ secrets.FOLIO_KEYSTORE_PATH }}
+          FOLIO_KEYSTORE_PASSWORD: ${{ secrets.FOLIO_KEYSTORE_PASSWORD }}
+          FOLIO_KEY_ALIAS: ${{ secrets.FOLIO_KEY_ALIAS }}
+          FOLIO_KEY_PASSWORD: ${{ secrets.FOLIO_KEY_PASSWORD }}
+
+      - name: Collect APKs
+        run: |
+          mkdir -p ../apk
+          find android/app/build/outputs/apk -name "*.apk" -exec cp {} ../apk/ \;
+          ls -lh ../apk/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: folio-apk
+          path: apk/*.apk
+          if-no-files-found: error
+
+      # On a tag, the APKs become release assets so the app can be downloaded
+      # without signing in to GitHub.
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        working-directory: .
+        run: gh release upload "${GITHUB_REF_NAME}" apk/*.apk --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

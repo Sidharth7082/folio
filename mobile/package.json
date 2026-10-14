@@ -1,0 +1,23 @@
+{
+  "name": "folio-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Android and iOS shell for Folio, the self-hosted light-novel reading room.",
+  "scripts": {
+    "icons": "node scripts/make-icons.mjs",
+    "sync": "cap sync",
+    "open:android": "cap open android",
+    "apk:debug": "npm run sync && cd android && ./gradlew assembleDebug",
+    "apk:release": "npm run sync && cd android && ./gradlew assembleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.4"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3"
+  }
+}

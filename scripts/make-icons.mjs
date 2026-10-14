@@ -15,37 +15,7 @@ import path from "node:path";
 
 import sharp from "sharp";
 
-const ACCENT = "#e6b566";
-const INK_TOP = "#1a2130";
-const INK_BOTTOM = "#0a0c11";
-
-/**
- * An open book: two pages meeting at a spine, with the bottom edge dipping to
- * the centre the way a real book falls open.
- *
- * The artwork fits inside the middle 80% of the canvas, which is the safe zone
- * Android keeps when it masks a `maskable` icon into a circle or squircle.
- * Everything outside that zone is background, so the mark survives any shape.
- */
-function markSvg(size, { maskable = false, stroke = 24 } = {}) {
-  // A maskable icon must fill its square: the platform supplies the corners.
-  const radius = maskable ? 0 : Math.round(size * 0.22);
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="${size}" height="${size}">
-  <defs>
-    <linearGradient id="ink" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="${INK_TOP}"/>
-      <stop offset="1" stop-color="${INK_BOTTOM}"/>
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" rx="${(radius / size) * 512}" ry="${(radius / size) * 512}" fill="url(#ink)"/>
-  <g fill="none" stroke="${ACCENT}" stroke-width="${stroke}" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M256 176 L256 388"/>
-    <path d="M256 176 C232 154 196 144 156 144 C142 144 130 146 118 150 L118 362 C130 358 142 356 156 356 C196 356 232 366 256 388"/>
-    <path d="M256 176 C280 154 316 144 356 144 C370 144 382 146 394 150 L394 362 C382 358 370 356 356 356 C316 356 280 366 256 388"/>
-  </g>
-</svg>`;
-}
+import { ACCENT, GLYPH_PATHS, INK_BOTTOM, foregroundSvg, markSvg } from "./mark.mjs";
 
 const projectRoot = path.resolve(import.meta.dirname, "..");
 
@@ -101,6 +71,98 @@ async function buildIco() {
   return Buffer.concat([header, directory, ...images.map((image) => image.data)]);
 }
 
+/**
+ * The Android project's resource folder, relative to the repo root.
+ *
+ * Capacitor scaffolds this with its own teal placeholder logo, which has to be
+ * overwritten or the installed app wears another project's branding.
+ */
+const ANDROID_RES = "mobile/android/app/src/main/res";
+
+/** Densities Android expects, with the size each bucket needs in pixels. */
+const ANDROID_LAUNCHER = [
+  { dir: "mipmap-mdpi", icon: 48, foreground: 108 },
+  { dir: "mipmap-hdpi", icon: 72, foreground: 162 },
+  { dir: "mipmap-xhdpi", icon: 96, foreground: 216 },
+  { dir: "mipmap-xxhdpi", icon: 144, foreground: 324 },
+  { dir: "mipmap-xxxhdpi", icon: 192, foreground: 432 },
+];
+
+/** The launch screens Capacitor scaffolds, at the sizes it uses. */
+const ANDROID_SPLASH = [
+  { dir: "drawable-port-mdpi", width: 320, height: 480 },
+  { dir: "drawable-port-hdpi", width: 480, height: 800 },
+  { dir: "drawable-port-xhdpi", width: 720, height: 1280 },
+  { dir: "drawable-port-xxhdpi", width: 960, height: 1600 },
+  { dir: "drawable-port-xxxhdpi", width: 1280, height: 1920 },
+  { dir: "drawable-land-mdpi", width: 480, height: 320 },
+  { dir: "drawable-land-hdpi", width: 800, height: 480 },
+  { dir: "drawable-land-xhdpi", width: 1280, height: 720 },
+  { dir: "drawable-land-xxhdpi", width: 1600, height: 960 },
+  { dir: "drawable-land-xxxhdpi", width: 1920, height: 1280 },
+];
+
+/** The mark centred on the app's background, for a launch screen. */
+function splashSvg(width, height) {
+  const mark = Math.round(Math.min(width, height) * 0.32);
+  const scale = mark / 512;
+  const x = (width - mark) / 2;
+  const y = (height - mark) / 2;
+  const paths = GLYPH_PATHS.map((d) => `    <path d="${d}"/>`).join("\n");
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <rect width="${width}" height="${height}" fill="${INK_BOTTOM}"/>
+  <g transform="translate(${x} ${y}) scale(${scale})" fill="none" stroke="${ACCENT}" stroke-width="24" stroke-linecap="round" stroke-linejoin="round">
+${paths}
+  </g>
+</svg>`;
+}
+
+/** Launcher icons and launch screens for the Android shell. */
+async function writeAndroidIcons() {
+  const resRoot = path.join(projectRoot, ANDROID_RES);
+
+  try {
+    await fs.access(resRoot);
+  } catch {
+    console.log("\nNo Android project found; skipping its icons.");
+    return;
+  }
+
+  console.log("");
+
+  for (const bucket of ANDROID_LAUNCHER) {
+    const dir = path.join(resRoot, bucket.dir);
+    await fs.mkdir(dir, { recursive: true });
+
+    // The legacy square and round icons carry their own plate, because older
+    // Android (and some launchers today) put them on the screen unchanged.
+    const plate = await sharp(Buffer.from(markSvg(bucket.icon)))
+      .png({ compressionLevel: 9 })
+      .toBuffer();
+    await fs.writeFile(path.join(dir, "ic_launcher.png"), plate);
+    await fs.writeFile(path.join(dir, "ic_launcher_round.png"), plate);
+
+    // The adaptive foreground has no plate: the launcher supplies the background
+    // from `@color/ic_launcher_background` and masks the two layers separately.
+    await sharp(Buffer.from(foregroundSvg(bucket.foreground)))
+      .png({ compressionLevel: 9 })
+      .toFile(path.join(dir, "ic_launcher_foreground.png"));
+
+    console.log(`${ANDROID_RES}/${bucket.dir}/  icon ${bucket.icon}px, foreground ${bucket.foreground}px`);
+  }
+
+  for (const screen of ANDROID_SPLASH) {
+    const dir = path.join(resRoot, screen.dir);
+    await fs.mkdir(dir, { recursive: true });
+    await sharp(Buffer.from(splashSvg(screen.width, screen.height)))
+      .png({ compressionLevel: 9 })
+      .toFile(path.join(dir, "splash.png"));
+  }
+
+  console.log(`${ANDROID_RES}/drawable-*/  splash  ${ANDROID_SPLASH.length} screens`);
+}
+
 async function main() {
   for (const target of PNG_TARGETS) {
     const svg = Buffer.from(markSvg(target.size, { maskable: target.maskable }));
@@ -128,6 +190,8 @@ async function main() {
   // would otherwise win the browser tab over ours.
   await fs.writeFile(path.join(projectRoot, "src/app/favicon.ico"), await buildIco());
   console.log("src/app/favicon.ico");
+
+  await writeAndroidIcons();
 }
 
 await main();
