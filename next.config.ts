@@ -4,6 +4,19 @@ const nextConfig: NextConfig = {
   /* config options here */
   cacheComponents: true,
   partialPrefetching: true,
+  // Emit a self-contained server in .next/standalone, with the parts of
+  // node_modules it actually uses. That is what lets a packaged copy run without
+  // `npm install` on the machine that receives it. `scripts/package.mjs`
+  // assembles the rest around it.
+  output: "standalone",
+  // The library and the catalogues are the operator's data, not part of the app.
+  // They are read at run time from FOLIO_HOME, and Turbopack otherwise resolves
+  // `process.cwd()` at build time, finds these folders, and bakes every book and
+  // both databases into the build. A packaged copy should carry the code; the
+  // books arrive afterwards.
+  outputFileTracingExcludes: {
+    "*": ["content/**/*", "data/**/*", "public/covers/**/*"],
+  },
   // adm-zip is a CommonJS package required at request time by the import route.
   // Keeping it out of the bundle avoids Turbopack trying to trace its internals.
   serverExternalPackages: ["adm-zip"],

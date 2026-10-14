@@ -20,6 +20,10 @@
 # production
 /build
 
+# Packaged builds from scripts/package.mjs. Reproducible, and large enough once
+# a catalogue is bundled that committing it would be hostile.
+/dist/
+
 # misc
 .DS_Store
 *.pem

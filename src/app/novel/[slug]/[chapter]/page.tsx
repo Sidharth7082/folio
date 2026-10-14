@@ -2,21 +2,24 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
 import { ReaderShell } from "@/components/reader/reader-shell";
-import { getChapter, getNovel, getNovelSlugs } from "@/lib/content/repository";
+import { getChapter } from "@/lib/content/repository";
 
-export async function generateStaticParams() {
-  const slugs = await getNovelSlugs();
-  const params = await Promise.all(
-    slugs.map(async (slug) => {
-      const novel = await getNovel(slug);
-      return (novel?.chapters ?? []).map((chapter) => ({
-        slug,
-        chapter: String(chapter.index),
-      }));
-    }),
-  );
-  return params.flat();
-}
+/**
+ * Chapters are deliberately not prerendered.
+ *
+ * The library is whatever the reader has imported, so the full chapter list only
+ * exists once the files are on disk. Enumerating it at build time produced one
+ * prerendered page per chapter — 2,424 pages and 1.7 GB of build output for a
+ * two-book library — and scaled with every book added.
+ *
+ * `getChapter` is cached, so the first request for a chapter pays for the render
+ * and later ones are served from the cache, which is the same deal without the
+ * build-time cost.
+ *
+ * `instant = false` marks the route as intentionally blocking, which it has to
+ * be: there is no chapter to show until the file has been read.
+ */
+export const instant = false;
 
 export async function generateMetadata({
   params,

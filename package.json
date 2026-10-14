@@ -9,6 +9,8 @@
     "lint": "eslint",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/",
     "ingest": "node scripts/ingest.mjs",
+    "icons": "node scripts/make-icons.mjs",
+    "package": "node scripts/package.mjs",
     "catalogue:import": "node scripts/import-ranobedb.mjs",
     "mangabaka:import": "node --max-old-space-size=4096 --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/import-mangabaka.mjs",
     "mangabaka:link": "node --max-old-space-size=4096 --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/link-mangabaka.mjs"

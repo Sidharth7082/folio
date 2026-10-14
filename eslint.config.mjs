@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Packaged output from scripts/package.mjs: a copy of the compiled app, so
+    // linting it reports the same findings over and over in generated code.
+    "dist/**",
   ]),
 ]);
 

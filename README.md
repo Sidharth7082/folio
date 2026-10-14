@@ -37,6 +37,43 @@ npm run dev
 
 Open http://localhost:3000.
 
+## Running it as an app
+
+The commands above are for working on Folio. To hand someone a copy they can
+just run:
+
+```bash
+npm run package                        # code only
+npm run package -- --with-catalogue    # also bundle the imported catalogue
+```
+
+That writes `dist/folio/` and prints its size. Nothing in it needs
+`npm install` — only Node itself. Inside are the built server, a launcher per
+platform, and, if asked for, the catalogue databases.
+
+| Platform | Start it |
+|---|---|
+| Windows | double-click `start-folio.bat` |
+| macOS | double-click `start-folio.command` |
+| Linux | `./start-folio.sh` |
+
+The launcher opens the browser and keeps the server in the foreground, so
+closing its window stops Folio and nothing is left running.
+
+Your books, their covers and your reading data go to `~/Folio`
+(`%USERPROFILE%\Folio` on Windows). That is deliberately outside the app
+folder, so replacing the app never loses your library. Set `FOLIO_HOME` to put
+it somewhere else, or `PORT` to change the port.
+
+On a phone, open the address in the browser and choose "Add to Home Screen".
+Folio carries a manifest and icons, so it installs as a standalone reading app
+rather than a bookmark. The server has to be reachable from the phone, so run
+it on a machine on the same network.
+
+> The Linux launcher is the one this is tested against. The Windows and macOS
+> launchers are written for their own shells but have not been run on those
+> systems, so treat them as unverified.
+
 ## Data sources and rebuilding
 
 **The catalogue databases are deliberately not in this repository.** They are
@@ -458,6 +495,8 @@ licence requires.
 | `npm run lint` | ESLint |
 | `npm test` | Unit tests for the parsing helpers |
 | `npm run ingest -- <file>` | Convert a file into `content/` |
+| `npm run icons` | Redraw the app icons from `scripts/make-icons.mjs` |
+| `npm run package` | Assemble `dist/folio/` for someone else to run |
 
 ## Architecture notes
 
@@ -468,4 +507,14 @@ licence requires.
   a server; a future sync layer can replace the store without touching the UI.
 - `next.config.ts` sets `images.unoptimized` because covers are local assets,
   often SVG. Switch it off if you serve raster covers and want optimisation.
+- Every path under the data root comes from `src/lib/config/paths.ts`, so
+  `FOLIO_HOME` is the only thing that has to move for a packaged copy.
+- Chapter pages are not prerendered, on purpose. Enumerating them at build time
+  produced one page per chapter — 2,424 pages and 1.7 GB of output for a
+  two-book library — and would force a rebuild every time someone added a book.
+  `getChapter` is cached at runtime instead.
+- The library and the databases are excluded from the build by
+  `outputFileTracingExcludes`. They are read at run time from `FOLIO_HOME`, and
+  Turbopack would otherwise resolve `process.cwd()` at build time, find them, and
+  bake every book into the output.
 
