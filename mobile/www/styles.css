@@ -425,6 +425,68 @@ body {
   background-color: rgb(88 150 220 / 0.4);
 }
 
+/* ---------------------------------------------------------- where from */
+
+.source-row {
+  display: flex;
+  align-items: stretch;
+}
+
+.source-row .pick {
+  flex: 1;
+  min-width: 0;
+}
+
+.pick-x {
+  flex: none;
+  width: 2.6rem;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.browse-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.2rem 0 0.7rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.browse-bar .icon-button {
+  width: 2.2rem;
+  height: 2.2rem;
+  flex: none;
+}
+
+#browse-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+#browse-list {
+  margin-top: 0.5rem;
+}
+
+#source-url {
+  width: 100%;
+  margin-bottom: 0.6rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--surface-2);
+  color: var(--fg);
+  font: 16px/1.4 system-ui, -apple-system, sans-serif;
+}
+
 /* ----------------------------------------------------------- read aloud */
 
 /*

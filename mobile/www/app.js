@@ -13,6 +13,7 @@ import { readEpub } from "./lib/epub.js";
 import { paint, rangeFor, unpaint } from "./lib/highlight.js";
 import { readPlainText } from "./lib/plain.js";
 import { findInBook } from "./lib/search.js";
+import { SOURCES, labelFor, loadSources, saveSources } from "./lib/sources.js";
 import { getBook, listBooks, putBook, saveProgress } from "./lib/store.js";
 import { collectChunks, createSpeech, firstAt } from "./lib/tts.js";
 import {
@@ -87,6 +88,19 @@ const els = {
   copyBackup: document.getElementById("copy-backup"),
   pasteBackup: document.getElementById("paste-backup"),
   restoreBackup: document.getElementById("restore-backup"),
+  openSources: document.getElementById("open-sources"),
+  sources: document.getElementById("sources"),
+  sourcesList: document.getElementById("sources-list"),
+  sourceList: document.getElementById("source-list"),
+  sourceAdd: document.getElementById("source-add"),
+  sourceUrl: document.getElementById("source-url"),
+  addSource: document.getElementById("add-source"),
+  closeSources: document.getElementById("close-sources"),
+  sourcesBrowse: document.getElementById("sources-browse"),
+  browseTitle: document.getElementById("browse-title"),
+  browseUp: document.getElementById("browse-up"),
+  browseList: document.getElementById("browse-list"),
+  browseBack: document.getElementById("browse-back"),
 };
 
 const bridge = globalThis.Capacitor;
@@ -437,22 +451,22 @@ function afterChapterSpoken() {
 /**
  * A stable id from the file's name and size.
  *
- * Importing the same book twice replaces it rather than adding a second copy,
- * which is what someone re-downloading a file actually wants.
+ * Bringing the same book in twice replaces it rather than adding a second copy,
+ * which is what someone re-downloading it actually wants — whether it came from
+ * the system picker or from a catalogue.
  */
-function idFor(file) {
+function idFor(name, size) {
   let hash = 0;
-  const key = `${file.name}:${file.size}`;
+  const key = `${name}:${size}`;
   for (let index = 0; index < key.length; index += 1) {
     hash = (hash * 31 + key.charCodeAt(index)) | 0;
   }
   return `b${(hash >>> 0).toString(36)}`;
 }
 
-/** Read an imported file into the shape the library stores. */
-async function parseImport(file) {
-  const bytes = await file.arrayBuffer();
-  const lower = file.name.toLowerCase();
+/** Read a book file, from anywhere, into the shape the library stores. */
+async function parseBytes(bytes, name) {
+  const lower = name.toLowerCase();
 
   if (lower.endsWith(".epub")) {
     const book = await readEpub(bytes);
@@ -466,7 +480,7 @@ async function parseImport(file) {
 
   if (lower.endsWith(".txt") || lower.endsWith(".md")) {
     const text = new TextDecoder().decode(bytes);
-    const fallback = file.name.replace(/\.[^.]+$/, "");
+    const fallback = name.replace(/\.[^.]+$/, "");
     const { chapters } = readPlainText(text, fallback);
     return { title: fallback, author: "Unknown author", chapters, cover: null };
   }
@@ -474,29 +488,37 @@ async function parseImport(file) {
   throw new Error("Folio reads EPUB and plain text (.txt, .md)");
 }
 
+/** Parse a book and put it in the library, replacing any copy already there. */
+async function addBook(bytes, fileName) {
+  const parsed = await parseBytes(bytes, fileName);
+  const id = idFor(fileName, bytes.byteLength);
+
+  // Where you had got to survives a re-download, which is the difference
+  // between replacing a book and losing your place in it.
+  const already = await getBook(id);
+
+  await putBook({
+    id,
+    title: parsed.title,
+    author: parsed.author,
+    chapterCount: parsed.chapters.length,
+    cover: parsed.cover ? new Blob([parsed.cover.bytes], { type: parsed.cover.type }) : null,
+    bytes,
+    fileName,
+    byteSize: bytes.byteLength,
+    addedAt: new Date().toISOString(),
+    progress: already?.progress ?? null,
+  });
+
+  await renderLibrary();
+  return parsed;
+}
+
 async function importFile(file) {
   toast(`Importing ${file.name}…`, 60000);
 
   try {
-    const parsed = await parseImport(file);
-    const cover = parsed.cover
-      ? new Blob([parsed.cover.bytes], { type: parsed.cover.type })
-      : null;
-
-    await putBook({
-      id: idFor(file),
-      title: parsed.title,
-      author: parsed.author,
-      chapterCount: parsed.chapters.length,
-      cover,
-      bytes: await file.arrayBuffer(),
-      fileName: file.name,
-      byteSize: file.size,
-      addedAt: new Date().toISOString(),
-      progress: null,
-    });
-
-    await renderLibrary();
+    const parsed = await addBook(await file.arrayBuffer(), file.name);
     toast(`Added “${parsed.title}” — ${parsed.chapters.length} chapters`);
   } catch (error) {
     toast(`Could not import that: ${error.message}`, 6000);
@@ -699,7 +721,7 @@ function closeReader() {
    Chapters and search
    ------------------------------------------------------------------------- */
 
-const sheets = [els.settings, els.chapters, els.search, els.backup];
+const sheets = [els.settings, els.chapters, els.search, els.backup, els.sources];
 
 /** Only one sheet is open at a time; opening one puts the others away. */
 function openSheet(sheet) {
@@ -978,6 +1000,165 @@ async function restoreBackup() {
 }
 
 /* -------------------------------------------------------------------------
+   Sources
+   ------------------------------------------------------------------------- */
+
+let sources = loadSources();
+
+/** Which source is being browsed, and the feeds leading back out of it. */
+let browsing = null;
+
+function renderSources() {
+  if (!sources.length) {
+    const nothing = document.createElement("li");
+    nothing.className = "sheet-hint";
+    nothing.textContent = "Nothing yet. Add the address of a catalogue you already use.";
+    els.sourceList.replaceChildren(nothing);
+    return;
+  }
+
+  els.sourceList.replaceChildren(
+    ...sources.map((source, index) => {
+      const label = document.createElement("span");
+      label.className = "pick-title";
+      label.textContent = labelFor(source.id, source.config);
+
+      const open = document.createElement("button");
+      open.type = "button";
+      open.className = "pick";
+      open.append(label);
+      open.addEventListener("click", () => void openSource(index));
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "pick-x";
+      remove.textContent = "×";
+      remove.setAttribute("aria-label", `Remove ${label.textContent}`);
+      remove.addEventListener("click", () => {
+        sources.splice(index, 1);
+        saveSources(sources);
+        renderSources();
+      });
+
+      const item = document.createElement("li");
+      item.className = "source-row";
+      item.append(open, remove);
+      return item;
+    }),
+  );
+}
+
+async function addSource() {
+  const url = els.sourceUrl.value.trim();
+  if (!url) {
+    toast("Type the address first.");
+    return;
+  }
+
+  // Read once before keeping it: an address that is wrong is much easier to
+  // deal with now than after it has been saved and listed.
+  try {
+    await SOURCES.opds.browse({ url }, null);
+  } catch (error) {
+    toast(`That address did not answer — ${error?.message ?? error}`, 6000);
+    return;
+  }
+
+  sources = sources.filter((source) => source.config.url !== url);
+  sources.push({ id: "opds", config: { url } });
+  saveSources(sources);
+
+  els.sourceUrl.value = "";
+  els.sourceAdd.open = false;
+  renderSources();
+  toast("Added. Tap it to browse.");
+}
+
+async function openSource(index) {
+  browsing = { source: sources[index], href: null, trail: [] };
+  els.sourcesList.hidden = true;
+  els.sourcesBrowse.hidden = false;
+  await showFeed(null);
+}
+
+/** Load one feed and show it. `href` of null means the source's own address. */
+async function showFeed(href) {
+  const { source } = browsing;
+  els.browseTitle.textContent = "Loading…";
+  els.browseList.replaceChildren();
+  els.browseUp.disabled = browsing.trail.length === 0;
+
+  try {
+    const feed = await SOURCES[source.id].browse(source.config, href);
+    browsing.href = href;
+    els.browseTitle.textContent = feed.title;
+    renderEntries(feed.entries);
+  } catch (error) {
+    els.browseTitle.textContent = "Could not read that";
+    const problem = document.createElement("li");
+    problem.className = "sheet-hint";
+    problem.textContent = error?.message ?? String(error);
+    els.browseList.replaceChildren(problem);
+  }
+}
+
+function renderEntries(entries) {
+  if (!entries.length) {
+    const nothing = document.createElement("li");
+    nothing.className = "sheet-hint";
+    nothing.textContent = "Nothing in this one.";
+    els.browseList.replaceChildren(nothing);
+    return;
+  }
+
+  els.browseList.replaceChildren(
+    ...entries.map((entry) => {
+      const title = document.createElement("span");
+      title.className = "pick-title";
+      title.textContent = entry.title;
+
+      const meta = document.createElement("span");
+      meta.className = "result-where";
+      meta.textContent = entry.kind === "feed" ? "Folder" : entry.author || "Book";
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "pick";
+      button.append(title, meta);
+      button.addEventListener("click", () => {
+        if (entry.kind === "feed") {
+          browsing.trail.push(browsing.href);
+          void showFeed(entry.href);
+        } else {
+          void download(entry, button, meta);
+        }
+      });
+
+      const item = document.createElement("li");
+      item.append(button);
+      return item;
+    }),
+  );
+}
+
+/** Fetch one book from a catalogue and put it in the library. */
+async function download(entry, button, meta) {
+  button.disabled = true;
+  meta.textContent = "Downloading…";
+
+  try {
+    const { bytes, fileName } = await SOURCES[browsing.source.id].book(browsing.source.config, entry);
+    meta.textContent = "Adding…";
+    const parsed = await addBook(bytes, fileName);
+    meta.textContent = `In your library — ${parsed.chapters.length} chapters`;
+    toast(`Added “${parsed.title}”`);
+  } catch (error) {
+    meta.textContent = error?.message ?? "That did not work.";
+    button.disabled = false;
+  }
+}
+
+/* -------------------------------------------------------------------------
    Wiring
    ------------------------------------------------------------------------- */
 
@@ -1019,6 +1200,22 @@ els.closeBackup.addEventListener("click", closeSheets);
 els.copyBackup.addEventListener("click", copyBackup);
 els.pasteBackup.addEventListener("click", pasteBackup);
 els.restoreBackup.addEventListener("click", restoreBackup);
+
+els.openSources.addEventListener("click", () => {
+  renderSources();
+  els.sourcesList.hidden = false;
+  els.sourcesBrowse.hidden = true;
+  openSheet(els.sources);
+});
+els.closeSources.addEventListener("click", closeSheets);
+els.addSource.addEventListener("click", addSource);
+els.browseBack.addEventListener("click", () => {
+  els.sourcesBrowse.hidden = true;
+  els.sourcesList.hidden = false;
+});
+els.browseUp.addEventListener("click", () => {
+  void showFeed(browsing.trail.pop() ?? null);
+});
 
 els.openSearch.addEventListener("click", () => {
   openSheet(els.search);

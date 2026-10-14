@@ -15,6 +15,13 @@
 
     <header class="bar" id="library-bar">
       <h1>Folio</h1>
+      <button id="open-sources" class="icon-button" type="button" aria-label="Sources">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.7" />
+          <path d="M4 12h16" fill="none" stroke="currentColor" stroke-width="1.7" />
+          <path d="M12 4c2.8 2.6 2.8 13.4 0 16-2.8-2.6-2.8-13.4 0-16z" fill="none" stroke="currentColor" stroke-width="1.7" />
+        </svg>
+      </button>
       <button id="open-backup" class="icon-button" type="button" aria-label="Backup and restore">
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
           <path d="M12 3v9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
@@ -243,6 +250,41 @@
       <button id="paste-backup" type="button" class="ghost">Paste</button>
       <button id="restore-backup" type="button" class="ghost">Restore from this text</button>
       <button id="close-backup" type="button" class="ghost">Done</button>
+    </section>
+
+    <!--
+      Somewhere else to get books from. Two views in one sheet: what is
+      installed, and where in one of them you are browsing.
+    -->
+    <section id="sources" class="sheet" hidden aria-label="Sources">
+      <div class="sheet-handle" aria-hidden="true"></div>
+
+      <div id="sources-list">
+        <p class="sheet-label">Sources</p>
+        <ul class="picker" id="source-list"></ul>
+
+        <details class="sheet-details" id="source-add">
+          <summary>Add a catalogue</summary>
+          <p class="sheet-hint">
+            Calibre-Web, Kavita, Komga and most library servers publish an OPDS feed — the
+            address usually ends in <code>/opds</code>. Folio only reads from it, and never
+            sends anything of yours to it.
+          </p>
+          <input id="source-url" type="url" autocomplete="off" placeholder="http://192.168.0.10:8083/opds" />
+          <button id="add-source" type="button" class="primary">Add</button>
+        </details>
+
+        <button id="close-sources" type="button" class="ghost">Done</button>
+      </div>
+
+      <div id="sources-browse" hidden>
+        <div class="browse-bar">
+          <button id="browse-up" class="icon-button" type="button" aria-label="Up one level">‹</button>
+          <span id="browse-title"></span>
+        </div>
+        <ul class="picker" id="browse-list"></ul>
+        <button id="browse-back" type="button" class="ghost">Back to sources</button>
+      </div>
     </section>
 
     <!-- A plain file input, which the WebView turns into the system picker.

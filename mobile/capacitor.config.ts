@@ -49,6 +49,11 @@ const config: CapacitorConfig = {
     backgroundColor: "#0c0e13",
   },
   plugins: {
+    // Requests go through the native side rather than the WebView's own, so a
+    // catalogue on the local network does not have to send CORS headers it has
+    // no reason to have heard of. Without this, browsing an OPDS server is
+    // refused by the browser before the server ever sees it.
+    CapacitorHttp: { enabled: true },
     SplashScreen: {
       // Held until the launch screen has decided what to show, so the splash does
       // not disappear onto a blank white frame.
