@@ -1,14 +1,21 @@
 import type { NextConfig } from "next";
 
+/**
+ * Set only by `scripts/package.mjs`.
+ *
+ * A standalone build is what lets a downloaded copy run without `npm install`,
+ * but it also makes the ordinary `next start` refuse to serve the result. Since
+ * that is the command used day to day, packaging is opt-in rather than always on.
+ */
+const PACKAGING = process.env.FOLIO_PACKAGE === "1";
+
 const nextConfig: NextConfig = {
   /* config options here */
   cacheComponents: true,
   partialPrefetching: true,
   // Emit a self-contained server in .next/standalone, with the parts of
-  // node_modules it actually uses. That is what lets a packaged copy run without
-  // `npm install` on the machine that receives it. `scripts/package.mjs`
-  // assembles the rest around it.
-  output: "standalone",
+  // node_modules it actually uses.
+  output: PACKAGING ? "standalone" : undefined,
   // The library and the catalogues are the operator's data, not part of the app.
   // They are read at run time from FOLIO_HOME, and Turbopack otherwise resolves
   // `process.cwd()` at build time, finds these folders, and bakes every book and

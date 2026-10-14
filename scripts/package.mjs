@@ -72,7 +72,12 @@ async function main() {
   if (!SKIP_BUILD) {
     console.log("Building…");
     const { spawn } = await import("node:child_process");
-    const build = spawn("npm", ["run", "build"], { cwd: projectRoot, stdio: "inherit" });
+    const build = spawn("npm", ["run", "build"], {
+      cwd: projectRoot,
+      stdio: "inherit",
+      // The only thing that switches next.config.ts into standalone mode.
+      env: { ...process.env, FOLIO_PACKAGE: "1" },
+    });
     const code = await new Promise((resolve) => build.on("close", resolve));
     if (code !== 0) throw new Error(`build failed with exit code ${code}`);
   }
